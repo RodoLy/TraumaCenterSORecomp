@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""Check that an extracted disc matches the target binary (RKDEEB rev 1).
+"""Check that an extracted disc matches the target binary (RKDEEB).
 
-Comprueba que un disco extraído coincide con el binario objetivo (RKDEEB rev 1).
+Comprueba que un disco extraído coincide con el binario objetivo (RKDEEB).
+
+The revision and the SHA-1 of main.dol are not recorded yet: they are left as None until
+the first check of a real disc, which prints them so they can be written below.
+
+La revisión y el SHA-1 de main.dol todavía no están registrados: quedan en None hasta la
+primera revisión de un disco real, que los imprime para escribirlos aquí abajo.
 
 Usage / Uso:
     python3 tools/check_disc.py                  # checks orig/RKDEEB
@@ -19,8 +25,10 @@ from dol import Dol  # noqa: E402
 from project import DISC_DIRECTORY, GAME_ID  # noqa: E402
 
 EXPECTED_GAME_ID = GAME_ID.encode("ascii")
-EXPECTED_REVISION = 1
-EXPECTED_DOL_SHA1 = "6ca574d26858941bfd1404b0293ef84bd821ddd0"
+# None until a real disc is checked; then write the printed values here.
+# None hasta revisar un disco real; luego escribe aquí los valores que se imprimen.
+EXPECTED_REVISION: int | None = None
+EXPECTED_DOL_SHA1: str | None = None
 
 # boot.bin starts with the disc header, laid out the same on GameCube and Wii
 # (Yet Another GameCube Documentation, "Disc header"; WiiBrew, "Wii disc").
@@ -66,17 +74,27 @@ def main() -> int:
     matches_target = True
     print(f"Title:    {title}")
     print(f"Game ID:  {game_id.decode('ascii', 'replace')}  (expected {GAME_ID})")
-    print(f"Revision: {revision}  (expected {EXPECTED_REVISION})")
-    if game_id != EXPECTED_GAME_ID or revision != EXPECTED_REVISION:
+    if game_id != EXPECTED_GAME_ID:
         matches_target = False
 
     dol_sha1 = sha1_of(dol_path)
-    print(f"main.dol: {dol_sha1}")
-    if dol_sha1 != EXPECTED_DOL_SHA1:
-        print(f"          expected {EXPECTED_DOL_SHA1}")
-        matches_target = False
+    not_recorded_yet = EXPECTED_REVISION is None or EXPECTED_DOL_SHA1 is None
+    if EXPECTED_REVISION is None:
+        print(f"Revision: {revision}  (not recorded yet: write it as EXPECTED_REVISION)")
+    else:
+        print(f"Revision: {revision}  (expected {EXPECTED_REVISION})")
+        if revision != EXPECTED_REVISION:
+            matches_target = False
 
-    # The DOL layout, handy when comparing against docs/DISC_ANALYSIS.md.
+    if EXPECTED_DOL_SHA1 is None:
+        print(f"main.dol: {dol_sha1}  (not recorded yet: write it as EXPECTED_DOL_SHA1)")
+    else:
+        print(f"main.dol: {dol_sha1}")
+        if dol_sha1 != EXPECTED_DOL_SHA1:
+            print(f"          expected {EXPECTED_DOL_SHA1}")
+            matches_target = False
+
+    # The DOL layout, handy when writing docs/FUNCTION_MAP.md.
     dol = Dol(dol_path)
     print(f"entry:    0x{dol.entry:08X}   bss: 0x{dol.bss_address:08X} (+0x{dol.bss_size:X})")
     for section in dol.sections:
@@ -85,6 +103,9 @@ def main() -> int:
             f"address 0x{section.address:08X}  size 0x{section.size:08X}"
         )
 
+    if matches_target and not_recorded_yet:
+        print("\nOK: the game ID matches. Record the revision and the SHA-1 above in this file.")
+        return 0
     if matches_target:
         print("\nOK: this is the target binary.")
         return 0
