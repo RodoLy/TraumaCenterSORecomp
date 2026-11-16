@@ -1,0 +1,19 @@
+# Text files are stored and checked out with LF on every system: the tools
+# write LF, and shell scripts must stay LF to run inside WSL even when Git for
+# Windows converts line endings (core.autocrlf).
+#
+# Los archivos de texto se guardan y se descargan con LF en todos los
+# sistemas: las herramientas escriben LF, y los scripts de shell tienen que
+# seguir en LF para correr dentro de WSL aunque Git para Windows convierta los
+# saltos de línea (core.autocrlf).
+* text=auto eol=lf
+
+# Game files are never committed (see .gitignore); if one is ever added by
+# mistake, it must not be treated as text.
+# Los archivos del juego nunca se suben (ver .gitignore); si alguno se agrega
+# por error, no debe tratarse como texto.
+*.dol binary
+*.gcm binary
+*.iso binary
+*.rvz binary
+*.wbfs binary
