@@ -2,10 +2,10 @@
 
 Pruebas del verificador de disco con una carpeta de disco hecha a mano, sin datos del juego.
 
-Until a real disc is checked, the expected revision and SHA-1 are not recorded, so the checker
+Before a real disc is checked, the expected revision and SHA-1 are not recorded, so the checker
 only compares the game ID and prints the other two values so they can be written down.
 
-Hasta revisar un disco real, la revisión y el SHA-1 esperados no están registrados, así que el
+Antes de revisar un disco real, la revisión y el SHA-1 esperados no están registrados, así que el
 verificador solo compara el ID del juego e imprime los otros dos valores para anotarlos.
 """
 
@@ -46,6 +46,8 @@ def test_with_nothing_recorded_the_game_id_is_enough_and_the_values_to_record_ar
     tmp_path, monkeypatch, capsys
 ):
     disc = make_disc(tmp_path / "disc", b"RKDEEB", 0)
+    monkeypatch.setattr(check_disc, "EXPECTED_REVISION", None)
+    monkeypatch.setattr(check_disc, "EXPECTED_DOL_SHA1", None)
 
     assert run_checker(monkeypatch, disc) == 0
     report = capsys.readouterr().out
@@ -63,7 +65,6 @@ def test_another_game_is_a_mismatch(tmp_path, monkeypatch, capsys):
 
 def test_once_recorded_a_different_main_dol_is_a_mismatch(tmp_path, monkeypatch, capsys):
     disc = make_disc(tmp_path / "disc", b"RKDEEB", 0)
-    monkeypatch.setattr(check_disc, "EXPECTED_REVISION", 0)
     monkeypatch.setattr(check_disc, "EXPECTED_DOL_SHA1", "0" * 40)
 
     assert run_checker(monkeypatch, disc) == check_disc.EXIT_MISMATCH

@@ -27,8 +27,8 @@ from project import DISC_DIRECTORY, GAME_ID  # noqa: E402
 EXPECTED_GAME_ID = GAME_ID.encode("ascii")
 # None until a real disc is checked; then write the printed values here.
 # None hasta revisar un disco real; luego escribe aquí los valores que se imprimen.
-EXPECTED_REVISION: int | None = None
-EXPECTED_DOL_SHA1: str | None = None
+EXPECTED_REVISION: int | None = 0
+EXPECTED_DOL_SHA1: str | None = "e27a182b057741ce65c16d8789bcf6bdd3d9e52f"
 
 # boot.bin starts with the disc header, laid out the same on GameCube and Wii
 # (Yet Another GameCube Documentation, "Disc header"; WiiBrew, "Wii disc").
