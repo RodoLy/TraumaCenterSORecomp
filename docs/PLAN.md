@@ -20,16 +20,16 @@ Disco de referencia: *Trauma Center: Second Opinion* (USA), ID `RKDEEB`.
 
 ### Fase 0 – Mapa de funciones
 
-- [ ] Extraer tu disco en `orig/RKDEEB/` y comprobarlo con
+- [x] Extraer tu disco en `orig/RKDEEB/` y comprobarlo con
       `tools/check_disc.py`; anotar la revisión y el SHA-1 de `main.dol` que
       imprime.
-- [ ] Generar `config/RKDEEB/symbols.txt` con `tools/analyze.py` y validar las
+- [x] Generar `config/RKDEEB/symbols.txt` con `tools/analyze.py` y validar las
       funciones contra `extabindex`.
-- [ ] Nombrar el SDK por firma (`tools/sdk_signatures.py`), con las bibliotecas
+- [x] Nombrar el SDK por firma (`tools/sdk_signatures.py`), con las bibliotecas
       de Wii (WPAD, KPAD, NAND, SC…).
-- [ ] Encontrar el bucle ocioso (`tools/find_idle_loops.py`) y los escritores
+- [x] Encontrar el bucle ocioso (`tools/find_idle_loops.py`) y los escritores
       de la tubería de GX (`tools/find_gx_pipe_writers.py`).
-- [ ] Escribir `docs/FUNCTION_MAP.md` con la evidencia de cada nombre.
+- [x] Escribir `docs/FUNCTION_MAP.md` con la evidencia de cada nombre.
 
 ### Fase 1 – Jugar con DolRecomp + ModernGekko
 
@@ -80,16 +80,16 @@ Reference disc: *Trauma Center: Second Opinion* (USA), ID `RKDEEB`.
 
 ### Phase 0 – Function map
 
-- [ ] Extract your disc into `orig/RKDEEB/` and check it with
+- [x] Extract your disc into `orig/RKDEEB/` and check it with
       `tools/check_disc.py`; record the revision and the `main.dol` SHA-1 it
       prints.
-- [ ] Generate `config/RKDEEB/symbols.txt` with `tools/analyze.py` and validate
+- [x] Generate `config/RKDEEB/symbols.txt` with `tools/analyze.py` and validate
       the functions against `extabindex`.
-- [ ] Name the SDK by signature (`tools/sdk_signatures.py`), with the Wii
+- [x] Name the SDK by signature (`tools/sdk_signatures.py`), with the Wii
       libraries (WPAD, KPAD, NAND, SC…).
-- [ ] Find the idle loop (`tools/find_idle_loops.py`) and the GX pipe writers
+- [x] Find the idle loop (`tools/find_idle_loops.py`) and the GX pipe writers
       (`tools/find_gx_pipe_writers.py`).
-- [ ] Write `docs/FUNCTION_MAP.md` with the evidence for every name.
+- [x] Write `docs/FUNCTION_MAP.md` with the evidence for every name.
 
 ### Phase 1 – Play with DolRecomp + ModernGekko
 
