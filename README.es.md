@@ -7,9 +7,8 @@ camino: el código PowerPC del juego se traducirá a C++ y se compilará para tu
 emulador. Sigue el mismo camino que el
 [port de *Harvest Moon: Animal Parade*](https://github.com/RodoLy/HarvestMoonAnimalParadeRecomp).
 
-> **Recién empieza.** Todavía no se puede jugar. Este repositorio tiene las herramientas de
-> análisis y el plan ([docs/PLAN.md](docs/PLAN.md)). El primer paso es el mapa de funciones del
-> juego.
+> **Recién empieza.** Todavía no se puede jugar. La fase 0, el mapa de funciones, ya está; lo
+> siguiente es que el juego corra con DolRecomp y ModernGekko ([docs/PLAN.md](docs/PLAN.md)).
 
 **Este repositorio no contiene datos del juego.** Necesitas tu propio disco: `Trauma Center:
 Second Opinion (USA)`, ID `RKDEEB`.
@@ -23,9 +22,7 @@ Second Opinion (USA)`, ID `RKDEEB`.
 
 ## Fase 0: el mapa de funciones del juego
 
-Lo que necesitas: Python 3.11 o más nuevo, y tu disco extraído con
-[Dolphin](https://dolphin-emu.org/) (clic derecho en el juego > *Propiedades* > *Sistema de
-archivos* > clic derecho en el disco > *Extraer disco entero…*) o con Wiimms ISO Tools (`wit`).
+Lo que necesitas: Python 3.11 o más nuevo y tu disco como imagen `.rvz` (el formato de Dolphin).
 
 1. Instala las dependencias de las herramientas:
 
@@ -33,8 +30,14 @@ archivos* > clic derecho en el disco > *Extraer disco entero…*) o con Wiimms I
    pip install -r requirements-dev.txt
    ```
 
-2. Pon la partición del juego extraída en `orig/RKDEEB/`, de modo que existan
-   `orig/RKDEEB/sys/main.dol` y `orig/RKDEEB/sys/boot.bin`. Nada de `orig/` se sube nunca.
+2. Saca los archivos de sistema de tu disco:
+
+   ```sh
+   python3 tools/extract_system_files.py "Trauma Center - Second Opinion (USA).rvz"
+   ```
+
+   Escribe `orig/RKDEEB/sys/boot.bin`, `main.dol` y `fst.bin`. Nada de `orig/` se sube nunca. El
+   disco europeo también funciona y queda en `orig/RKDP01/`.
 
 3. Comprueba el disco:
 
@@ -42,9 +45,7 @@ archivos* > clic derecho en el disco > *Extraer disco entero…*) o con Wiimms I
    python3 tools/check_disc.py
    ```
 
-   La primera vez imprime la revisión y el SHA-1 de `main.dol`. Escríbelos como
-   `EXPECTED_REVISION` y `EXPECTED_DOL_SHA1` en `tools/check_disc.py`, para que las siguientes
-   revisiones los comparen.
+   Debe terminar con `OK: this is the target binary.`
 
 4. Genera el mapa de funciones:
 
@@ -53,7 +54,14 @@ archivos* > clic derecho en el disco > *Extraer disco entero…*) o con Wiimms I
    ```
 
    Escribe `config/RKDEEB/symbols.txt`, la única lista de nombres y tamaños de funciones que leen
-   todas las demás herramientas.
+   todas las demás herramientas. Después nombra las funciones del SDK de Nintendo con la base de
+   datos de firmas de Dolphin (`Sys/totaldb.dsy` en tu carpeta de Dolphin):
+
+   ```sh
+   python3 tools/sdk_signatures.py --database ruta/a/totaldb.dsy --apply
+   ```
+
+   Lo que salió está en [docs/FUNCTION_MAP.md](docs/FUNCTION_MAP.md).
 
 5. Corre las pruebas cuando quieras con `python3 -m pytest`. Arman archivos DOL mínimos a mano,
    así que no necesitan datos del juego.
