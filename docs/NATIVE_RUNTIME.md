@@ -53,11 +53,23 @@ Lo que se aprendió en el camino:
 - **VI** guarda sus variables en otro orden: cada una se encontró por lo que
   hace el código con ella.
 
+### La capa del juego
+
+- `wiicompiled/RKDEEB.yml`: el manifiesto para el traductor.
+- `wiicompiled/RKDEEB-MAP.txt`: las 7838 funciones, de `tools/export_wiicompiled_map.py`.
+- `tools/export_wiicompiled_layer.py` coloca 260 de las 582 funciones nativas
+  de WiiCompiled en las direcciones de este juego (Animal Parade: 302). Las que
+  faltan son funciones del SDK que este juego no tiene o que todavía no tienen
+  nombre; esas corren traducidas.
+- `tools/name_from_reference_game.py` nombró 83 funciones del SDK copiando los
+  nombres de Animal Parade donde el código es idéntico.
+- El IOS (9) se supone, porque el TMD del disco todavía no se lee; el `OSInit`
+  de este juego no se detiene si no coincide.
+
 ### Lo que sigue
 
-El manifiesto de WiiCompiled, el mapa de funciones y la capa del juego (con
-las herramientas de exportación de Animal Parade), y luego el paquete para
-Windows.
+Correr el workflow del paquete de Windows ARM64 y probarlo: traducir, compilar
+y llegar a la pantalla de título.
 
 ---
 
@@ -112,7 +124,19 @@ What was learned on the way:
 - **VI** keeps its variables in another order: each was found by what the
   code does with it.
 
+### The game layer
+
+- `wiicompiled/RKDEEB.yml`: the manifest for the translator.
+- `wiicompiled/RKDEEB-MAP.txt`: the 7838 functions, from `tools/export_wiicompiled_map.py`.
+- `tools/export_wiicompiled_layer.py` places 260 of WiiCompiled's 582 natives
+  at this game's addresses (Animal Parade: 302). The rest are SDK functions this
+  game does not have or that are not named yet; those run translated.
+- `tools/name_from_reference_game.py` named 83 SDK functions by copying Animal
+  Parade's names where the code is identical.
+- The IOS (9) is assumed, because the disc's TMD is not read yet; this game's
+  `OSInit` does not stop when it differs.
+
 ### What comes next
 
-WiiCompiled's manifest, the function map and the game layer (with Animal
-Parade's export tools), then the Windows package.
+Run the Windows ARM64 package workflow and test it: translate, compile and
+reach the title screen.

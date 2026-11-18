@@ -39,7 +39,7 @@ que terminó usando Animal Parade. Avance en [NATIVE_RUNTIME.md](NATIVE_RUNTIME.
 
 - [x] Tablas de direcciones para las funciones nativas de WiiCompiled
       (143 de 143).
-- [ ] Manifiesto, mapa de funciones y capa del juego para WiiCompiled.
+- [x] Manifiesto, mapa de funciones y capa del juego para WiiCompiled.
 - [ ] Paquete para Windows ARM64 y x64, con el puntero en el mouse.
 - [ ] Pantalla de título.
 
@@ -111,7 +111,7 @@ the path Animal Parade ended up taking. Progress in
 [NATIVE_RUNTIME.md](NATIVE_RUNTIME.md).
 
 - [x] Address tables for WiiCompiled's native functions (143 of 143).
-- [ ] Manifest, function map and game layer for WiiCompiled.
+- [x] Manifest, function map and game layer for WiiCompiled.
 - [ ] Package for Windows ARM64 and x64, with the mouse as the pointer.
 - [ ] Title screen.
 
