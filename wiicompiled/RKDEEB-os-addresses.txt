@@ -1,0 +1,65 @@
+# Where this game keeps what WiiCompiled's native OS looks for at Mario Kart Wii's addresses.
+# Dónde guarda este juego lo que el OS nativo de WiiCompiled busca en las direcciones de Mario Kart Wii.
+#
+# WiiCompiled's runtime/src/hle/os names 25 addresses of Mario Kart Wii (PAL, RMCP01) with MKW_GADDR():
+# functions it calls and variables of the SDK it reads and writes. To use those native functions here,
+# each needs this game's address. docs/NATIVE_RUNTIME.md explains why; tests/test_wiicompiled_addresses.py
+# checks every row against main.dol.
+#
+# El runtime de WiiCompiled nombra 25 direcciones de Mario Kart Wii en su OS. Para usar esas funciones
+# nativas aquí, cada una necesita la dirección de este juego. La prueba comprueba cada fila contra main.dol.
+#
+# covers: runtime/src/hle/os runtime/src/fiber_manager.cpp
+#
+# Columns / Columnas:
+#   1. the address in Mario Kart Wii (PAL), as MKW_GADDR() writes it
+#   2. the address in this game (RKDEEB), or "-" when this game has no such thing
+#   3. what it is
+#   4. the evidence: a function of this game that touches the address (for a variable), or "name" (for a
+#      function: symbols.txt gives it that name), or "held at 0x..." (main.dol holds the address in that
+#      word), or "-" with the reason in column 3
+#
+# A variable's evidence is a function of this game that loads it, stores it or puts its address
+# together. The SDK's variables of one source file sit in the same order in both games, so when the
+# evidence alone does not say which of two neighbours is which, the order does: that is said in column 3.
+
+# ---------------------------------------------------------------- functions
+0x801A20BC  0x80137B34  OSInitContext                                   name
+0x801A0620  0x801360A0  InsertAlarm (the runtime calls it to queue an alarm)  name
+0x801A1ED8  0x80137950  OSSaveContext (the scheduler calls it before switching threads)  name
+0x801A961C  0x8013D748  __OSThreadInit (a native runs it after its own start-up)  name
+0x801AADE0  0x8013EC7C  __OSTimeToSystemTime (for the fire times of alarms)  name
+0x801A8088  0x8013C5F8  __OSUnlockAllMutex                              name
+0x801AA0F0  0x8013E1F0  OSExitThread (the return address of every new thread)  name
+0x801ABC0C  ?           __OSDefaultPowerCallback                        ? no function like __OSDefaultPowerCallback
+0x80192F7C  0x80164380  IPCInit                                         name
+
+# ---------------------------------------------------------------- OSThread.c
+0x80347130  0x802DCE30  the flag OSCreateThread reads before its slow path  OSCreateThread
+0x80347498  0x802ED918  DefaultThread (an OSThread, 0x318 bytes)        __OSThreadInit
+0x803477B0  0x802EDC30  RunQueue[32] (right after DefaultThread)        OSResumeThread
+0x803478B0  ?           IdleContext (right after RunQueue)              ? no function like 0x8025AB90
+0x80385AA8  0x803A6DD8  the word OSCreateThread masks with 0xF8 (starts at 0xF8)  OSCreateThread
+0x80385AE0  0x803A6E00  SwitchThreadCallback (starts at DefaultSwitchThreadCallback, 0x8025A5A0)  __OSThreadInit
+0x80386918  ?           Reschedule: OSDisableScheduler's count          ? no function like OSDisableScheduler
+0x8038691C  ?           RunQueueHint (the next word, in the same order)  ? no function like 0x8025AB90
+0x80386920  ?           RunQueueBits (the next word; the idle loop at 0x8025ACE0 waits on it)  ? no function like 0x8025AB90
+
+# ---------------------------------------------------------------- OSAlarm.c, OSInterrupt.c, and IPC
+0x803868A0  0x803A7928  AlarmQueue (head, tail)                         OSCancelAlarm
+0x803868F8  0x803A7988  the pointer to the interrupt handler table      __OSGetInterruptHandler
+0x803867EC  ?           IPCBufferLo, which IPCInit sets from __OSGetIPCBufferLo (not that one: it starts at -1)  ? no function like IPCGetBufferLo
+
+# ---------------------------------------------------------------- OSStateTM.c (five words in the same order)
+0x80386934  0x803A79C4  StmReady: the state manager is set up           __OSInitSTM
+0x80386938  0x803A79C8  the handle of /dev/stm/immediate                __OSInitSTM
+0x8038693C  0x803A79CC  the handle of /dev/stm/eventhook                __OSInitSTM
+0x80386940  ?           whether the event handler is waiting            ? no function like OSSetPowerCallback
+0x80386948  ?           PowerCallback                                   ? no function like OSSetPowerCallback
+
+# ---------------------------------------------------------------- Mario Kart Wii only
+0x80386298  -           Mario Kart Wii's RFL manager, for its own RFLiIsWorking: not an OS variable  -
+0x805529A8  -           THP::VideoDecoder, a thread of Mario Kart Wii's movie player that OSCreateThread treats apart  -
+0x80552A74  -           THP::VideoDecoderOnMemory, the same             -
+0x8055531C  -           StaticR.rel's prolog, which a native wraps: this game has no REL  -
+0x8024373C  -           EGG::Thread::start, which the fibers wait on: Mario Kart Wii's own thread library, not in this game  -
