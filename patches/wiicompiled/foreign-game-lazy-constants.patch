@@ -1,0 +1,36 @@
+diff --git a/runtime/src/hle/audio/ax_effects.cpp b/runtime/src/hle/audio/ax_effects.cpp
+index ade28b5..c23f056 100644
+--- a/runtime/src/hle/audio/ax_effects.cpp
++++ b/runtime/src/hle/audio/ax_effects.cpp
+@@ -23,8 +23,10 @@ constexpr uint32_t kSamplesPerFrame = 96;
+ constexpr uint32_t kChannels = 3;
+ 
+ // .sdata2 constants the guest function loads through r2.
+-const uint32_t kOneConstantAddr = MKW_GADDR(80388588);   // 1.0f
+-const uint32_t kScaleConstantAddr = MKW_GADDR(8038858C); // 0.6f send pre-scale
++// Looked up when used, by the native AXFXReverbStdExpCallback only: a foreign game that uses
++// another reverb (Trauma Center: Second Opinion) has neither, and that native is not registered.
++const auto kOneConstantAddr = MKW_GADDR_LAZY(80388588);   // 1.0f
++const auto kScaleConstantAddr = MKW_GADDR_LAZY(8038858C); // 0.6f send pre-scale
+ 
+ // AXFX_REVERBSTD_EXP field offsets (byte offsets into the struct in r4).
+ constexpr uint32_t kFieldPreDelayCoef = 0x18;
+diff --git a/runtime/src/hle/gx/gx_internal.h b/runtime/src/hle/gx/gx_internal.h
+index 0f6a2b9..e818be6 100644
+--- a/runtime/src/hle/gx/gx_internal.h
++++ b/runtime/src/hle/gx/gx_internal.h
+@@ -58,9 +58,11 @@ bool is_offscreen() noexcept;
+ 
+ // --- Constants ---
+ const uint32_t kGXDataPtrAddr = MKW_GADDR(803886C8);
+-const uint32_t kDlFifoAddr = MKW_GADDR(80344090);
+-const uint32_t kDlWritePtrAddr = MKW_GADDR(803440A4);
+-const uint32_t kDlCountAddr = MKW_GADDR(803440AC);
++// Looked up when used: a foreign game that never builds display lists (Trauma Center: Second
++// Opinion) has none of these, and a lookup at start-up would stop it before it runs.
++const auto kDlFifoAddr = MKW_GADDR_LAZY(80344090);
++const auto kDlWritePtrAddr = MKW_GADDR_LAZY(803440A4);
++const auto kDlCountAddr = MKW_GADDR_LAZY(803440AC);
+ constexpr uint32_t kDlWrapFlagOffset = 0x20;
+ constexpr uint32_t kMaxTluts = 20;
+ const uint32_t kGxDrawDoneFlagAddr = MKW_GADDR(803867d8);

@@ -66,10 +66,14 @@ Lo que se aprendió en el camino:
 - El IOS es el 9, como dice el TMD del disco; el `OSInit` de este juego no se
   detiene si no coincide.
 
-### Lo que sigue
+### Primera prueba
 
-Correr el workflow del paquete de Windows ARM64 y probarlo: traducir, compilar
-y llegar a la pantalla de título.
+El paquete tradujo y compiló el juego, pero el ejecutable se cerraba al
+instante (código `0xC0000409`, sin registros). WiiCompiled busca algunas
+direcciones al arrancar, antes de `main`; cinco de ellas no existen en este
+juego (las listas de comandos de GX y la reverb estándar), y una dirección que
+falta lo detiene. `patches/wiicompiled/foreign-game-lazy-constants.patch` hace
+que esas cinco se busquen solo cuando se usan, y este juego nunca las usa.
 
 ---
 
@@ -136,7 +140,11 @@ What was learned on the way:
 - The IOS is 9, as the disc's TMD says; this game's `OSInit` does not stop when
   it differs.
 
-### What comes next
+### First test
 
-Run the Windows ARM64 package workflow and test it: translate, compile and
-reach the title screen.
+The package translated and compiled the game, but the program closed at once
+(code `0xC0000409`, no logs). WiiCompiled looks up some addresses at start-up,
+before `main`; five of them do not exist in this game (the GX display lists and
+the standard reverb), and a missing address stops it.
+`patches/wiicompiled/foreign-game-lazy-constants.patch` makes those five be
+looked up only when used, and this game never uses them.
