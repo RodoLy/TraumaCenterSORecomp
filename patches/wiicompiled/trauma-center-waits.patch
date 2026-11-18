@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..4892f72
+index 0000000..26f827c
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,325 @@
+@@ -0,0 +1,366 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -171,10 +171,51 @@ index 0000000..4892f72
 +} // namespace
 +} // namespace TraumaCenterWaits
 +
++namespace TraumaCenterWaits {
++namespace {
++// The title scene waits for the "slCheck" task (the save check), which waits for the save task. Both
++// are the game's own tasks; 0x8000DD4C finds one by name and its work area is at +0x38. Their steps
++// and results are logged when they change.
++constexpr uint32_t kFindTask = 0x8000DD4Cu;
++constexpr uint32_t kSaveCheckTaskName = 0x803A6850u; // "slCheck"
++constexpr uint32_t kSaveTaskName = 0x80228A48u;
++
++void LogSaveTasks(CpuContext* ctx) {
++    static uint32_t s_last[6] = {0xDEADBEEFu};
++    uint32_t now[6] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
++    if (const uint32_t check = Call(kFindTask, ctx, {kSaveCheckTaskName})) {
++        const uint32_t work = Memory::Read32(check + 0x38u);
++        now[0] = Memory::Read32(work);
++        now[1] = Memory::Read32(work + 0x12Cu);
++        now[2] = Memory::Read32(work + 0x130u);
++    }
++    if (const uint32_t save = Call(kFindTask, ctx, {kSaveTaskName})) {
++        const uint32_t work = Memory::Read32(save + 0x38u);
++        now[3] = Memory::Read32(work + 0x04u);
++        now[4] = Memory::Read32(work + 0x08u);
++        now[5] = Memory::Read32(work + 0x124u);
++    }
++    bool changed = false;
++    for (int i = 0; i < 6; ++i) {
++        changed |= now[i] != s_last[i];
++        s_last[i] = now[i];
++    }
++    if (changed) {
++        RT_LOG(RT_TAG_MOD) << "[start-up] slCheck step " << static_cast<int32_t>(now[0]) << " (0x12C "
++                           << static_cast<int32_t>(now[1]) << ", 0x130 " << static_cast<int32_t>(now[2])
++                           << "), save task step " << static_cast<int32_t>(now[3]) << " (8 "
++                           << static_cast<int32_t>(now[4]) << ", result " << static_cast<int32_t>(now[5])
++                           << ")" << std::endl;
++    }
++}
++} // namespace
++} // namespace TraumaCenterWaits
++
 +extern "C" void TraumaCenterSoundThreadLoop(CpuContext* ctx) {
 +    using namespace TraumaCenterWaits;
 +    for (;;) {
 +        LogStartUpState();
++        LogSaveTasks(ctx);
 +        if (const uint32_t record = DoneRecord(kDoneSlot)) {
 +            MarkFinished(record);
 +        }
