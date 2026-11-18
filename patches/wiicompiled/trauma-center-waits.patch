@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..4fd8728
+index 0000000..4892f72
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,309 @@
+@@ -0,0 +1,325 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -286,9 +286,25 @@ index 0000000..4fd8728
 +    using namespace TraumaCenterWaits;
 +    const uint32_t returnAddress = ctx->lr;
 +    static int s_logged = 0;
-+    if (s_logged < kCallsLogged) {
++    if (s_logged < kCallsLogged && returnAddress != 0x8003E5ACu) {
 +        ++s_logged;
 +        RT_LOG(RT_TAG_MOD) << "[start-up] pause from 0x" << std::hex << returnAddress - 4 << std::dec << std::endl;
++    }
++    // The title scene (0x8003E588) pauses the game every frame and keeps its own step at r31's
++    // address: 0 starts a fade, 1 waits for it, 2 starts the "TTL DRAW FILE SETUP" task that loads
++    // title.pak, 3 waits for that task (its state at -0x6E34(r13), done at 3), 4 runs the menu.
++    if (returnAddress == 0x8003E5ACu) {
++        static uint32_t s_lastStep = 0xFFFFFFFFu;
++        static uint32_t s_lastTask = 0xFFFFFFFFu;
++        const uint32_t step = Memory::Read32(ctx->gpr[31]);
++        const uint32_t task = Memory::Read32(0x803A788Cu); // -0x6E34(r13)
++        const uint32_t taskState = task != 0 ? Memory::Read32(task) : 0xFFFFFFFFu;
++        if (step != s_lastStep || taskState != s_lastTask) {
++            s_lastStep = step;
++            s_lastTask = taskState;
++            RT_LOG(RT_TAG_MOD) << "[start-up] title scene step " << step << ", file setup task 0x" << std::hex
++                               << task << " state " << taskState << std::dec << std::endl;
++        }
 +    }
 +    if (Memory::Read8(kFadePending) != 0) {
 +        Call(kStopFade, ctx, {0});
