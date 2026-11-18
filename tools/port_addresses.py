@@ -77,11 +77,14 @@ class Game:
     def function(self, name: str) -> Symbol | None:
         return self.symbols.by_name(name)
 
-    def reached(self, function: Symbol) -> list[int]:
-        cache = self.__dict__.setdefault("_reached", {})
+    def reaches(self, function: Symbol) -> list[tuple[int, str]]:
+        cache = self.__dict__.setdefault("_reaches", {})
         if function.address not in cache:
-            cache[function.address] = addresses_in_order(self, function)
+            cache[function.address] = reaches_in_order(self, function)
         return cache[function.address]
+
+    def reached(self, function: Symbol) -> list[int]:
+        return [address for address, _ in self.reaches(function)]
 
     def functions_reaching(self, address: int) -> list[Symbol]:
         """The named functions that reach `address`, built once for the whole program."""
@@ -164,19 +167,27 @@ def addresses_in_order(game: Game, function: Symbol) -> list[int]:
     """The addresses `function` puts together or reads and writes at, in the order it first reaches them.
 
     The same register following as tools/code_facts.py, keeping the order instead of a set."""
+    return [address for address, _ in reaches_in_order(game, function)]
+
+
+def reaches_in_order(game: Game, function: Symbol) -> list[tuple[int, str]]:
+    """Like addresses_in_order, with how each address is first reached and where it lies, such as
+    ("lwz", "data") or ("address", "code"). Two builds of a function that reach the same things in the
+    same way give the same list of kinds; a compiler that reordered them does not."""
     count = function.size // INSTRUCTION_SIZE
     words = unpack(f">{count}I", game.dol.read(function.address, function.size))
     known: dict[int, int] = dict(game.small_data_bases)
-    reached: list[int] = []
+    reached: dict[int, str] = {}
 
-    def reach(address: int) -> None:
+    def reach(address: int, how: str) -> None:
         if address not in reached:
-            reached.append(address)
+            where = "code" if game.dol.is_code(address) else "data" if game.dol.is_mapped(address) else "bss"
+            reached[address] = f"{how} {where}"
 
     for index, word in enumerate(words):
         instruction = Instruction(function.address + index * INSTRUCTION_SIZE, word)
         if instruction.opcode in MEMORY_OPCODES and instruction.ra in known:
-            reach((known[instruction.ra] + instruction.displacement) & WORD_MASK)
+            reach((known[instruction.ra] + instruction.displacement) & WORD_MASK, f"op{instruction.opcode}")
         address = _address_put_together_by(instruction, known)
         for register in instruction.written_registers:
             known.pop(register, None)
@@ -187,8 +198,9 @@ def addresses_in_order(game: Game, function: Symbol) -> list[int]:
             destination = instruction.ra if instruction.is_or_immediate else instruction.rd
             known[destination] = address
             if not instruction.is_load_immediate_shifted:
-                reach(address)
-    return [address for address in reached if address not in game.small_data_bases.values()]
+                reach(address, "address")
+    bases = set(game.small_data_bases.values())
+    return [(address, how) for address, how in reached.items() if address not in bases]
 
 
 def port_row(row: list[str], reference: Game, target: Game, names_found: dict[int, str]) -> tuple[str, str]:
@@ -247,22 +259,24 @@ def port_row(row: list[str], reference: Game, target: Game, names_found: dict[in
         )
     if here is None:
         return UNKNOWN, f"no function like {evidence_name}, and no other evidence"
-    return UNKNOWN, (
-        f"{evidence_name} reaches {len(reference.reached(there))} addresses there and "
-        f"{len(target.reached(here))} here, and no other evidence"
-    )
+    return UNKNOWN, (f"{evidence_name} reaches its addresses differently here, and no other evidence")
 
 
 def _through(
     reference: Game, target: Game, there: Symbol | None, here: Symbol | None, address: int
 ) -> int | None:
-    """Where `here` keeps what `there` reaches at `address`, when both reach the same number of things."""
+    """Where `here` keeps what `there` reaches at `address`, when both reach the same things in the same
+    order and the same way. Only the count would not do: two builds can reach the same number of
+    addresses in a different order (the scheduler moves loads and stores around)."""
     if there is None or here is None:
         return None
-    reached_there, reached_here = reference.reached(there), target.reached(here)
-    if address not in reached_there or len(reached_there) != len(reached_here):
+    reaches_there, reaches_here = reference.reaches(there), target.reaches(here)
+    if [how for _, how in reaches_there] != [how for _, how in reaches_here]:
         return None
-    return reached_here[reached_there.index(address)]
+    addresses_there = [reached for reached, _ in reaches_there]
+    if address not in addresses_there:
+        return None
+    return reaches_here[addresses_there.index(address)][0]
 
 
 def port_table(
