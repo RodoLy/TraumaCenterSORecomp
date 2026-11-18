@@ -31,7 +31,19 @@ Disco de referencia: *Trauma Center: Second Opinion* (USA), ID `RKDEEB`.
       de la tubería de GX (`tools/find_gx_pipe_writers.py`).
 - [x] Escribir `docs/FUNCTION_MAP.md` con la evidencia de cada nombre.
 
-### Fase 1 – Jugar con DolRecomp + ModernGekko
+### Fase 1 – Jugar nativo con WiiCompiled
+
+Cambio de plan: el script de Linux con ModernGekko no sirve en una laptop con
+Windows en ARM (WSL no llega a la GPU ahí), así que se toma directo el camino
+que terminó usando Animal Parade. Avance en [NATIVE_RUNTIME.md](NATIVE_RUNTIME.md).
+
+- [ ] Tablas de direcciones para las funciones nativas de WiiCompiled
+      (108 de 143).
+- [ ] Manifiesto, mapa de funciones y capa del juego para WiiCompiled.
+- [ ] Paquete para Windows ARM64 y x64, con el puntero en el mouse.
+- [ ] Pantalla de título.
+
+### Antes: DolRecomp + ModernGekko (descartado por ahora)
 
 - [ ] Recompilar `main.dol` con DolRecomp en modo Wii.
 - [ ] Llegar a la pantalla de título desde código recompilado.
@@ -91,7 +103,19 @@ Reference disc: *Trauma Center: Second Opinion* (USA), ID `RKDEEB`.
       (`tools/find_gx_pipe_writers.py`).
 - [x] Write `docs/FUNCTION_MAP.md` with the evidence for every name.
 
-### Phase 1 – Play with DolRecomp + ModernGekko
+### Phase 1 – Play natively with WiiCompiled
+
+Change of plan: the Linux script with ModernGekko does not work on a Windows
+on ARM laptop (WSL cannot reach the GPU there), so this port goes straight to
+the path Animal Parade ended up taking. Progress in
+[NATIVE_RUNTIME.md](NATIVE_RUNTIME.md).
+
+- [ ] Address tables for WiiCompiled's native functions (108 of 143).
+- [ ] Manifest, function map and game layer for WiiCompiled.
+- [ ] Package for Windows ARM64 and x64, with the mouse as the pointer.
+- [ ] Title screen.
+
+### Before: DolRecomp + ModernGekko (set aside for now)
 
 - [ ] Recompile `main.dol` with DolRecomp in Wii mode.
 - [ ] Reach the title screen from recompiled code.
