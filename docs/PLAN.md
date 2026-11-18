@@ -37,8 +37,8 @@ Cambio de plan: el script de Linux con ModernGekko no sirve en una laptop con
 Windows en ARM (WSL no llega a la GPU ahí), así que se toma directo el camino
 que terminó usando Animal Parade. Avance en [NATIVE_RUNTIME.md](NATIVE_RUNTIME.md).
 
-- [ ] Tablas de direcciones para las funciones nativas de WiiCompiled
-      (108 de 143).
+- [x] Tablas de direcciones para las funciones nativas de WiiCompiled
+      (143 de 143).
 - [ ] Manifiesto, mapa de funciones y capa del juego para WiiCompiled.
 - [ ] Paquete para Windows ARM64 y x64, con el puntero en el mouse.
 - [ ] Pantalla de título.
@@ -110,7 +110,7 @@ on ARM laptop (WSL cannot reach the GPU there), so this port goes straight to
 the path Animal Parade ended up taking. Progress in
 [NATIVE_RUNTIME.md](NATIVE_RUNTIME.md).
 
-- [ ] Address tables for WiiCompiled's native functions (108 of 143).
+- [x] Address tables for WiiCompiled's native functions (143 of 143).
 - [ ] Manifest, function map and game layer for WiiCompiled.
 - [ ] Package for Windows ARM64 and x64, with the mouse as the pointer.
 - [ ] Title screen.

@@ -35,6 +35,27 @@ operaciones (`opeManager`, `opeObject_*` para cada enfermedad, `y_opeCut`,
 `y_opeDirect`…), `scr*` los guiones de las escenas y `ttl*`/`sl*` la pantalla
 de título y la de selección.
 
+### Nombradas leyendo el código
+
+Funciones del SDK que la base de firmas no reconoció, porque esta versión es
+más vieja. `tools/port_addresses.py` encontró cinco por tener el mismo código
+que en Animal Parade (`OSInitContext`, `__OSGetInterruptHandler`,
+`IPCGetBufferHi`, `DSPCheckInit`, `DSPAssertTask`); estas diez se nombraron a
+mano:
+
+| Dirección | Nombre | Evidencia |
+|---|---|---|
+| 0x8015AC88 | `__AXOutInitDSP` | llena la tarea del DSP de AX (callbacks en +0x28…+0x34) y llama a `DSPAddTask` |
+| 0x8015AC14 | `__AXDSPInitCallback` | pone en 1 la bandera que `__AXOutInitDSP` espera |
+| 0x8015AC20 | `__AXDSPResumeCallback` | `__AXOutInitDSP` la guarda en +0x2C de la tarea |
+| 0x8015AC74 | `__AXDSPRequestCallback` | ídem, en +0x30 |
+| 0x8015AD6C | `__AXOutInit` | llama a `__AXOutInitDSP`, `AIInitDMA` y `AIStartDMA` |
+| 0x8015EDD0 | `DSPAddTask` | `__DSP_insert_task` y luego `__DSP_boot_task`, justo después de `DSPCheckInit` |
+| 0x8013F430 | `__OSDefaultPowerCallback` | un `blr` que `__OSInitSTM` guarda como callback de apagado |
+| 0x801643F4 | `IPCGetBufferLo` | lee `IPCBufferLo`, junto a `IPCGetBufferHi` |
+| 0x801643FC | `IPCSetBufferLo` | escribe `IPCBufferLo` |
+| 0x8014C280 | `GXSetDrawDoneCallback` | cambia el callback con interrupciones apagadas, justo antes de `GXFinishInterruptHandler` |
+
 ### El disco europeo
 
 `RKDP01`, revisión 0, SHA-1 `7700acf2e73fbd5be907a0313ab70b8b204a2f79`. Su
@@ -74,6 +95,26 @@ The source file names hint at how the game is laid out: `cad*` is the engine
 (files, threads, models, input), `ope*` are the operations (`opeManager`,
 `opeObject_*` for each disease, `y_opeCut`, `y_opeDirect`…), `scr*` the scene
 scripts and `ttl*`/`sl*` the title and select screens.
+
+### Named by reading the code
+
+SDK functions the signature database did not recognize, because this version
+is older. `tools/port_addresses.py` found five by having the same code as in
+Animal Parade (`OSInitContext`, `__OSGetInterruptHandler`, `IPCGetBufferHi`,
+`DSPCheckInit`, `DSPAssertTask`); these ten were named by hand:
+
+| Address | Name | Evidence |
+|---|---|---|
+| 0x8015AC88 | `__AXOutInitDSP` | fills AX's DSP task (callbacks at +0x28…+0x34) and calls `DSPAddTask` |
+| 0x8015AC14 | `__AXDSPInitCallback` | sets the flag `__AXOutInitDSP` waits on |
+| 0x8015AC20 | `__AXDSPResumeCallback` | `__AXOutInitDSP` stores it at +0x2C of the task |
+| 0x8015AC74 | `__AXDSPRequestCallback` | the same, at +0x30 |
+| 0x8015AD6C | `__AXOutInit` | calls `__AXOutInitDSP`, `AIInitDMA` and `AIStartDMA` |
+| 0x8015EDD0 | `DSPAddTask` | `__DSP_insert_task` then `__DSP_boot_task`, right after `DSPCheckInit` |
+| 0x8013F430 | `__OSDefaultPowerCallback` | a `blr` that `__OSInitSTM` stores as the power callback |
+| 0x801643F4 | `IPCGetBufferLo` | reads `IPCBufferLo`, next to `IPCGetBufferHi` |
+| 0x801643FC | `IPCSetBufferLo` | writes `IPCBufferLo` |
+| 0x8014C280 | `GXSetDrawDoneCallback` | swaps the callback with interrupts off, right before `GXFinishInterruptHandler` |
 
 ### The European disc
 

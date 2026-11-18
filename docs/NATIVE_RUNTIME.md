@@ -31,37 +31,33 @@ tienen cada dirección con su evidencia, y busca lo mismo aquí:
 `tests/test_wiicompiled_addresses.py` vuelve a comprobar cada fila contra
 `main.dol` (con `TC_SO_DOL` apuntando a tu `orig/RKDEEB/sys/main.dol`).
 
-### Cómo van
+### Cómo quedaron
 
-| Tabla | Filas listas |
-|---|---|
-| startup | 5 de 5 |
-| os | 30 de 31 |
-| sc | 2 de 3 |
-| storage (DVD, NAND, IPC) | 23 de 27 |
-| gx | 28 de 37 |
-| vi | 9 de 14 |
-| audio | 11 de 26 |
-| **Total** | **108 de 143** |
+Las 143 filas están completas y comprobadas. La herramienta pasó 108; las
+otras 35 se encontraron leyendo el código, porque *Second Opinion* salió con
+el Wii en 2006 y trae un SDK más viejo que Animal Parade o Mario Kart Wii
+(2008). Las tablas ya no se regeneran con la herramienta: se mantienen a mano.
 
-### Lo que falta, y por qué
+Lo que se aprendió en el camino:
 
-*Second Opinion* salió con el Wii en 2006 y trae un SDK más viejo que Animal
-Parade o Mario Kart Wii (2008). Las 35 filas que faltan están justo donde el
-SDK cambió:
+- **El audio sí encaja.** El microcódigo de AX de este juego tiene el checksum
+  `0xFA450138`, el AX viejo de los primeros juegos de Wii, y el mezclador de
+  WiiCompiled ya lo conoce (es la variante que Dolphin llama "old AXWii"). Lo
+  que cambia es la DRAM de la tarea: 0x2000 bytes en la dirección 0 del DSP,
+  donde Mario Kart Wii usa 0x40 bytes en 0xCD2. WiiCompiled escribe los
+  valores de Mario Kart Wii; hay que revisar al probarlo si eso importa.
+- **La reverb estándar** (`AXFXReverbStd`) no existe aquí; el juego usa
+  `AXFXReverbHi`, que corre traducida. Esas filas quedan en "-".
+- **El juego nunca arma listas de comandos de GX** (no enlaza
+  `GXBeginDisplayList`), así que esas variables tampoco existen.
+- **VI** guarda sus variables en otro orden: cada una se encontró por lo que
+  hace el código con ella.
 
-- **Audio (15).** La versión de AX es anterior: no tiene las funciones de las
-  que salía la evidencia (`__AXOutInitDSP`, los callbacks del DSP, la reverb
-  `AXFXReverbStd`; este juego usa `AXFXReverbHi`). Además, el audio nativo de
-  WiiCompiled lee los bloques de parámetros de cada voz con la forma de 2008;
-  hay que revisar que este AX tenga la misma forma. **Es el riesgo más
-  grande.**
-- **Listas de comandos de GX (8).** El juego no enlaza `GXBeginDisplayList`
-  ni `GXEndDisplayList`; si de verdad nunca arma listas, esas filas quedan en
-  "-".
-- **VI (5)**, **DVD y NAND (4)**, `IPCSetBufferLo`, `GXSetDrawDoneCallback`,
-  `__OSDefaultPowerCallback` y la tabla de regiones de SC: código que cambió
-  entre versiones del SDK. Hay que encontrarlos leyendo el código.
+### Lo que sigue
+
+El manifiesto de WiiCompiled, el mapa de funciones y la capa del juego (con
+las herramientas de exportación de Animal Parade), y luego el paquete para
+Windows.
 
 ---
 
@@ -93,32 +89,30 @@ hold each address with its evidence, and looks for the same thing here:
 `tests/test_wiicompiled_addresses.py` checks every row again against
 `main.dol` (with `TC_SO_DOL` pointing at your `orig/RKDEEB/sys/main.dol`).
 
-### Where they stand
+### How they ended up
 
-| Table | Rows done |
-|---|---|
-| startup | 5 of 5 |
-| os | 30 of 31 |
-| sc | 2 of 3 |
-| storage (DVD, NAND, IPC) | 23 of 27 |
-| gx | 28 of 37 |
-| vi | 9 of 14 |
-| audio | 11 of 26 |
-| **Total** | **108 of 143** |
+All 143 rows are filled in and checked. The tool carried over 108; the other
+35 were found by reading the code, because *Second Opinion* launched with the
+Wii in 2006 and carries an older SDK than Animal Parade or Mario Kart Wii
+(2008). The tables are no longer regenerated with the tool: they are kept by
+hand.
 
-### What is left, and why
+What was learned on the way:
 
-*Second Opinion* launched with the Wii in 2006 and carries an older SDK than
-Animal Parade or Mario Kart Wii (2008). The 35 rows left are exactly where the
-SDK changed:
+- **The audio does fit.** This game's AX microcode has the checksum
+  `0xFA450138`, the old AX of the first Wii games, and WiiCompiled's mixer
+  already knows it (the variant Dolphin calls "old AXWii"). What differs is
+  the task's DRAM: 0x2000 bytes at DSP address 0, where Mario Kart Wii uses
+  0x40 bytes at 0xCD2. WiiCompiled writes Mario Kart Wii's values; whether
+  that matters is to be seen when testing.
+- **The standard reverb** (`AXFXReverbStd`) is not here; the game uses
+  `AXFXReverbHi`, which runs translated. Those rows are "-".
+- **The game never builds GX display lists** (it does not link
+  `GXBeginDisplayList`), so those variables do not exist either.
+- **VI** keeps its variables in another order: each was found by what the
+  code does with it.
 
-- **Audio (15).** Its AX is older: it lacks the functions the evidence came
-  from (`__AXOutInitDSP`, the DSP callbacks, the `AXFXReverbStd` reverb; this
-  game uses `AXFXReverbHi`). On top of that, WiiCompiled's native audio reads
-  each voice's parameter block in the 2008 shape; this AX has to be checked
-  for the same shape. **This is the biggest risk.**
-- **GX display lists (8).** The game does not link `GXBeginDisplayList` or
-  `GXEndDisplayList`; if it really never builds lists, those rows become "-".
-- **VI (5)**, **DVD and NAND (4)**, `IPCSetBufferLo`, `GXSetDrawDoneCallback`,
-  `__OSDefaultPowerCallback` and SC's region table: code that changed between
-  SDK versions. They have to be found by reading the code.
+### What comes next
+
+WiiCompiled's manifest, the function map and the game layer (with Animal
+Parade's export tools), then the Windows package.
