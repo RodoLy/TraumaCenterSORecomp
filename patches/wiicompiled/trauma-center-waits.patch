@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..2d18bba
+index 0000000..4fd8728
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,251 @@
+@@ -0,0 +1,309 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -27,6 +27,7 @@ index 0000000..2d18bba
 +#include "runtime_log.h"
 +
 +#include <cstdint>
++#include <cstring>
 +#include <initializer_list>
 +#include <string>
 +
@@ -255,3 +256,60 @@ index 0000000..2d18bba
 +    ctx->gpr[3] = static_cast<uint32_t>(status);
 +}
 +FOREIGN_GAME_WRAPPER(RKDEEB, 8016A828, TraumaCenterWPADGetStatus);
++
++// The main loop stops running the game while its flags have bit 0x2 set. 0x8000A574 sets it (and the
++// counter at -0x7F80(r13) to -1); 0x8000A5D4 sets that counter to 5, and five frames later the main
++// loop clears the bit again. Both are called from many places, so for now these two do exactly what
++// the game's code does and also log who called them, to find the pause that is never undone.
++// El ciclo principal no corre el juego mientras la bandera 0x2 está puesta; aquí se anota quién la pone
++// y quién la quita, para encontrar la pausa que nunca se deshace.
++namespace TraumaCenterWaits {
++namespace {
++constexpr uint32_t kPauseCounter = 0x803A6740u;     // -0x7F80(r13)
++constexpr uint32_t kFadePending = 0x803A7404u;      // -0x72BC(r13), a byte
++constexpr uint32_t kFadeFirstValue = 0x803A7408u;   // -0x72B8(r13), a float
++constexpr uint32_t kFadeSecondValue = 0x803A740Cu;  // -0x72B4(r13), a float
++constexpr uint32_t kStopFade = 0x8000E9DCu;
++constexpr uint32_t kSetFade = 0x8000E9B4u;
++constexpr int kCallsLogged = 40;
++
++float ReadFloat(uint32_t address) {
++    const uint32_t bits = Memory::Read32(address);
++    float value;
++    std::memcpy(&value, &bits, sizeof(value));
++    return value;
++}
++} // namespace
++} // namespace TraumaCenterWaits
++
++extern "C" void TraumaCenterPauseGame(CpuContext* ctx) {
++    using namespace TraumaCenterWaits;
++    const uint32_t returnAddress = ctx->lr;
++    static int s_logged = 0;
++    if (s_logged < kCallsLogged) {
++        ++s_logged;
++        RT_LOG(RT_TAG_MOD) << "[start-up] pause from 0x" << std::hex << returnAddress - 4 << std::dec << std::endl;
++    }
++    if (Memory::Read8(kFadePending) != 0) {
++        Call(kStopFade, ctx, {0});
++        ctx->fpr[1].d = ReadFloat(kFadeFirstValue);
++        ctx->fpr[2].d = ReadFloat(kFadeSecondValue);
++        Call(kSetFade, ctx, {0});
++        Memory::Write8(kFadePending, 0);
++    }
++    Memory::Write32(kPauseCounter, 0xFFFFFFFFu);
++    Memory::Write32(kMainLoopFlags, (Memory::Read32(kMainLoopFlags) & ~1u) | 2u);
++    ctx->lr = returnAddress;
++}
++FOREIGN_GAME_WRAPPER(RKDEEB, 8000A574, TraumaCenterPauseGame);
++
++extern "C" void TraumaCenterResumeGame(CpuContext* ctx) {
++    using namespace TraumaCenterWaits;
++    static int s_logged = 0;
++    if (s_logged < kCallsLogged) {
++        ++s_logged;
++        RT_LOG(RT_TAG_MOD) << "[start-up] resume from 0x" << std::hex << ctx->lr - 4 << std::dec << std::endl;
++    }
++    Memory::Write32(kPauseCounter, 5);
++}
++FOREIGN_GAME_WRAPPER(RKDEEB, 8000A5D4, TraumaCenterResumeGame);
