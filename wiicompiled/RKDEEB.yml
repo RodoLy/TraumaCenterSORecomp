@@ -1,0 +1,68 @@
+# Project manifest for WiiCompiled's translator: Trauma Center: Second Opinion (USA), RKDEEB revision 0.
+# Manifiesto del proyecto para el traductor de WiiCompiled: Trauma Center: Second Opinion (USA).
+#
+# Copy this file to projects/trauma-center-so/recomp.yml inside a clone of
+# github.com/patchzyy/wiicompiled. docs/NATIVE_RUNTIME.md explains the steps.
+# Copia este archivo a projects/trauma-center-so/recomp.yml dentro de una copia de WiiCompiled.
+# docs/NATIVE_RUNTIME.md explica los pasos.
+#
+# WiiCompiled's runtime replaces SDK functions at Mario Kart Wii's addresses;
+# tools/export_wiicompiled_layer.py places them at this game's.
+# El runtime de WiiCompiled reemplaza funciones del SDK en las direcciones de Mario Kart Wii.
+# tools/export_wiicompiled_layer.py las coloca en las de este juego.
+
+schema_version: 1
+workspace_root: ../..
+
+project:
+  id: trauma-center-second-opinion-rkdeeb
+  display_name: "Trauma Center: Second Opinion (USA)"
+  game_id: RKDEEB
+
+memory:
+  base: 0x80000000
+  size: 0x01800000  # MEM1, the console's 24 MB of main memory
+  # The small data area bases that __init_registers (0x80006290) loads with lis/ori:
+  # r2 at 0x8000630C and r13 at 0x80006314.
+  # Las bases del área de datos pequeños que carga __init_registers con lis/ori.
+  sda_base: 0x803AE6C0
+  sda2_base: 0x803B0240
+
+inputs:
+  dol:
+    # Set RECOMP_RKDEEB_DOL to your extracted orig/RKDEEB/sys/main.dol.
+    # Pon en RECOMP_RKDEEB_DOL la ruta de tu orig/RKDEEB/sys/main.dol extraído.
+    path: "%RECOMP_RKDEEB_DOL%"
+    sha256: cf630832a34143d946ee1823ef6b55711418e34e5e1b6f0120e02acc24603ebf
+
+translation:
+  entry_points:
+    - 0x80006124  # __start, the DOL's entry point
+  function_map:
+    # wiicompiled/RKDEEB-MAP.txt, written by tools/export_wiicompiled_map.py; copy it next to this file.
+    # wiicompiled/RKDEEB-MAP.txt, lo escribe tools/export_wiicompiled_map.py; cópialo junto a este archivo.
+    path: projects/trauma-center-so/MAP.txt
+  # Off, as in Mario Kart Wii and Animal Parade: an instruction the translator does not know stops it,
+  # which is what we want to find out.
+  # Apagado, como en Mario Kart Wii y Animal Parade: una instrucción que el traductor no conozca lo
+  # detiene, que es justo lo que queremos averiguar.
+  allow_unsupported_instructions: false
+
+runtime:
+  # Holds only native/natives.cpp from tools/export_wiicompiled_layer.py: WiiCompiled's natives at
+  # this game's addresses. Left out, this setting defaults to runtime/src, and then the translator
+  # takes the natives at Mario Kart Wii's addresses as this game's.
+  # Solo contiene native/natives.cpp de tools/export_wiicompiled_layer.py. Si se omite, vale
+  # runtime/src, y el traductor toma las nativas en las direcciones de Mario Kart Wii como de este juego.
+  native_registration_root: projects/trauma-center-so/native
+  native_abi_directories: []
+
+# The runtime's CMake reads the translation from generated/ at the clone's root, as for Mario Kart Wii
+# (generated/build_shards/shards.cmake, generated/data_sections_init.cpp, generated/RuntimeConfig.h).
+# El CMake del runtime lee la traducción de generated/ en la raíz de la copia, igual que con Mario Kart Wii.
+output:
+  root: generated
+  functions: functions
+  runtime_config: RuntimeConfig.h
+  data_initializer: data_sections_init.cpp
+  base_manifest: base/base_manifest.json
