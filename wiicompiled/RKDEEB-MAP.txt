@@ -4996,10 +4996,10 @@
 8017e758 GKI_remove_from_timer_list
 8017e87c GKI_init
 8017e90c GKI_shutdown
-8017e9b4 0x8017e9b4
-8017e9b8 0x8017e9b8
-8017e9bc 0x8017e9bc
-8017e9c0 0x8017e9c0
+8017e9b4 GKI_run
+8017e9b8 GKI_sched_lock
+8017e9bc GKI_sched_unlock
+8017e9c0 GKI_delay
 8017e9c4 GKI_send_event
 8017ea68 0x8017ea68
 8017ea70 0x8017ea70
