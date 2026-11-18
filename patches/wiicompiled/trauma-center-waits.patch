@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..1956547
+index 0000000..4804316
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,157 @@
+@@ -0,0 +1,190 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -161,3 +161,36 @@ index 0000000..1956547
 +    ctx->gpr[3] = data;
 +}
 +FOREIGN_GAME_WRAPPER(RKDEEB, 8000BCDC, TraumaCenterLoadFile);
++
++// KPADInit waits for the Wii Remote's Bluetooth with `while (WPADGetStatus() != 3) {}`. On the Wii the
++// Bluetooth module answered from its own interrupts during that loop; here the game only moves on at
++// an OS wait, so the loop would spin forever. This is WPADGetStatus (a jump to WUDGetStatus): it reads
++// the same status byte, and when KPADInit is the one asking and the module is not ready yet, it waits
++// one retrace first so the Bluetooth can answer. Every other caller gets the status straight away.
++//
++// KPADInit espera el Bluetooth del Wii Remote dando vueltas sin pausa. Aquí, solo cuando la pregunta
++// viene de KPADInit y todavía no está listo, se espera un retrazado para que el Bluetooth avance.
++namespace TraumaCenterWaits {
++namespace {
++constexpr uint32_t kBluetoothStatus = 0x8031BE28u; // the byte WUDGetStatus reads
++constexpr uint32_t kBluetoothReady = 3;
++constexpr uint32_t kKPADInitWaitLoop = 0x80177328u; // where KPADInit's loop comes back to
++
++int32_t BluetoothStatus() {
++    return static_cast<int8_t>(Memory::Read8(kBluetoothStatus));
++}
++} // namespace
++} // namespace TraumaCenterWaits
++
++extern "C" void TraumaCenterWPADGetStatus(CpuContext* ctx) {
++    using namespace TraumaCenterWaits;
++    const uint32_t returnAddress = ctx->lr;
++    int32_t status = BluetoothStatus();
++    if (status != static_cast<int32_t>(kBluetoothReady) && returnAddress == kKPADInitWaitLoop) {
++        WaitForRetrace(ctx);
++        status = BluetoothStatus();
++    }
++    ctx->lr = returnAddress;
++    ctx->gpr[3] = static_cast<uint32_t>(status);
++}
++FOREIGN_GAME_WRAPPER(RKDEEB, 8016A828, TraumaCenterWPADGetStatus);
