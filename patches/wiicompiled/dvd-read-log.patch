@@ -1,0 +1,31 @@
+diff --git a/runtime/src/hle/storage/dvd.cpp b/runtime/src/hle/storage/dvd.cpp
+--- a/runtime/src/hle/storage/dvd.cpp
++++ b/runtime/src/hle/storage/dvd.cpp
+@@ -3,6 +3,7 @@
+ #include "hle/dvd_contract.h"
+ #include "hle/runtime_parse_helpers.h"
+ #include "memory.h"
++#include "guest_abi/guest_region.h"
+ 
+ // Defined in hle/gx/gx_objects.cpp. DVD reads are DMA-class writes to guest
+ // RAM: the game brackets them with DCInvalidateRange (not a flush), so the GX
+@@ -932,6 +933,19 @@
+ 
+     CopyToGuestAsDma(bufferPtr, tempBuf.data(), uLength);
+ 
++    // A game that is being brought up and shows nothing: which files it reads says how far it got.
++    // Each file is named once, the first time it is read, for a foreign game only.
++    if (::GuestRegion::IsForeignGame()) {
++        static std::vector<bool> s_named;
++        if (s_named.size() <= extent->entryIndex) {
++            s_named.resize(extent->entryIndex + 1, false);
++        }
++        if (!s_named[extent->entryIndex]) {
++            s_named[extent->entryIndex] = true;
++            RT_LOG(RT_TAG_DVD) << "read " << HostPathText(entry.hostPath) << std::endl;
++        }
++    }
++
+     Memory::Write32(fileInfoPtr + DVD_CB_OFFSET_TRANSFERRED, uLength);
+     Memory::Write32(fileInfoPtr + DVD_CB_OFFSET_STATE, DVD_STATE_END);
+     CompleteDvdCancelState();
