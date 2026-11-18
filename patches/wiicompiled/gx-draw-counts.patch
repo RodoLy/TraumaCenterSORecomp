@@ -1,0 +1,70 @@
+diff --git a/runtime/src/hle/gx/gx_dl.cpp b/runtime/src/hle/gx/gx_dl.cpp
+--- a/runtime/src/hle/gx/gx_dl.cpp
++++ b/runtime/src/hle/gx/gx_dl.cpp
+@@ -1,3 +1,4 @@
++#include <atomic>
+ #include "gx_internal.h"
+ 
+ #include <cstring>
+@@ -1431,7 +1432,11 @@
+     TraceArrayValues("normals", nrm.base, nrm.stride);
+ }
+ 
++// Counted for the once-a-second draw summary in gx_copy.cpp.
++std::atomic<uint32_t> g_gxCallDisplayListCount{0};
++
+ extern "C" void GX__CallDisplayList_80172f64(uint32_t listAddr, uint32_t nbytes) {
++    g_gxCallDisplayListCount.fetch_add(1, std::memory_order_relaxed);
+     if (nbytes == 0 || listAddr == 0) return;
+     if (GxFrameTrace::Active() && !GxWorker::OnWorker()) {
+         auto* cpu = TryGetCpuContext();
+diff --git a/runtime/src/hle/gx/gx_vertex.cpp b/runtime/src/hle/gx/gx_vertex.cpp
+--- a/runtime/src/hle/gx/gx_vertex.cpp
++++ b/runtime/src/hle/gx/gx_vertex.cpp
+@@ -1,3 +1,4 @@
++#include <atomic>
+ // gx_vertex.cpp - Vertex Descriptor and Attribute Functions
+ #include "gx_internal.h"
+ #include "gx_stream_common.h"
+@@ -339,7 +340,11 @@
+     GxFrameTrace::Note("Begin prim 0x%02X fmt %u count %u layout%s", t, vf, nv, layout);
+ }
+ 
++// Counted for the once-a-second draw summary in gx_copy.cpp.
++std::atomic<uint32_t> g_gxBeginCount{0};
++
+ extern "C" void GX__Begin_8016f0f0(uint32_t t, uint32_t vf, uint32_t nv) {
++    g_gxBeginCount.fetch_add(1, std::memory_order_relaxed);
+     if(IsDisplayListActive()){
+         WriteDisplayListData((u8)(t|vf), 1);
+         WriteDisplayListData((u16)nv, 2);
+diff --git a/runtime/src/hle/gx/gx_copy.cpp b/runtime/src/hle/gx/gx_copy.cpp
+--- a/runtime/src/hle/gx/gx_copy.cpp
++++ b/runtime/src/hle/gx/gx_copy.cpp
+@@ -1,3 +1,4 @@
++#include <atomic>
+ // gx_copy.cpp - Framebuffer Copy Operations
+ #include "gx_internal.h"
+ 
+@@ -130,7 +131,21 @@
+ // Copy Execution
+ // ============================================================================
+ 
++extern std::atomic<uint32_t> g_gxCallDisplayListCount;
++extern std::atomic<uint32_t> g_gxBeginCount;
++
++// Once every 60 frames: how many GXBegin draws and display lists the game sent. A screen that stays
++// black while these are high is drawn but lost on the way; while they are zero the game is not drawing.
++static void LogDrawSummary() {
++    static uint32_t s_frames = 0;
++    if (++s_frames < 60) return;
++    s_frames = 0;
++    RT_LOG(RT_TAG_GX) << "[draws] last 60 frames: " << g_gxBeginCount.exchange(0) << " GXBegin, "
++                      << g_gxCallDisplayListCount.exchange(0) << " display lists" << std::endl;
++}
++
+ extern "C" void GX__CopyDisp_8016fc38(uint32_t da, uint32_t c) {
++    LogDrawSummary();
+     GxFrameTrace::Note("CopyDisp to 0x%08X clear=%u", da, c);
+     GxFrameTrace::EndFrame();
+     EnsureAuroraFrameActive();
