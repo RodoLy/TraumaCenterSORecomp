@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..ef9fea6
+index 0000000..2d18bba
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,213 @@
+@@ -0,0 +1,251 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -133,9 +133,47 @@ index 0000000..ef9fea6
 +} // namespace TraumaCenterWaits
 +
 +// 0x8006F8B0: the sound streaming thread's entry. It never returns, like the original.
++namespace TraumaCenterWaits {
++namespace {
++// While the screen stays black: the HOME button library's loader (its state at +0x94 goes 0, 1, 2 and
++// the main loop runs the game only at 2) and the five files it waits for (each done at state 4), and
++// the main loop's flags. Logged each time one of them changes, so the log shows where start-up stops.
++constexpr uint32_t kHomeButtonLoader = 0x803A7688u; // -0x7038(r13)
++constexpr uint32_t kMainLoopFlags = 0x803A73FCu;    // -0x72C4(r13)
++
++uint32_t ReadIfGuest(uint32_t address) {
++    return (address >= 0x80000000u && address < 0x81800000u) ? Memory::Read32(address) : 0xFFFFFFFFu;
++}
++
++void LogStartUpState() {
++    static uint32_t s_last[8] = {0xDEADBEEFu};
++    uint32_t now[8] = {};
++    const uint32_t loader = Memory::Read32(kHomeButtonLoader);
++    now[0] = loader;
++    now[1] = loader != 0 ? ReadIfGuest(loader + 0x94u) : 0;
++    for (uint32_t i = 0; i < 5; ++i) {
++        const uint32_t file = loader != 0 ? ReadIfGuest(loader + 0x9Cu + i * 4u) : 0;
++        now[2 + i] = (file != 0 && file != 0xFFFFFFFFu) ? ReadIfGuest(file + 0x0Cu) : 0xFFFFFFFFu;
++    }
++    now[7] = Memory::Read32(kMainLoopFlags);
++    bool changed = false;
++    for (int i = 0; i < 8; ++i) {
++        changed |= now[i] != s_last[i];
++        s_last[i] = now[i];
++    }
++    if (changed) {
++        RT_LOG(RT_TAG_MOD) << "[start-up] home loader 0x" << std::hex << now[0] << " state " << now[1]
++                           << " files " << now[2] << " " << now[3] << " " << now[4] << " " << now[5]
++                           << " " << now[6] << " main flags 0x" << now[7] << std::dec << std::endl;
++    }
++}
++} // namespace
++} // namespace TraumaCenterWaits
++
 +extern "C" void TraumaCenterSoundThreadLoop(CpuContext* ctx) {
 +    using namespace TraumaCenterWaits;
 +    for (;;) {
++        LogStartUpState();
 +        if (const uint32_t record = DoneRecord(kDoneSlot)) {
 +            MarkFinished(record);
 +        }
