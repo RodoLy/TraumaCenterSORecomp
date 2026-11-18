@@ -75,6 +75,17 @@ juego (las listas de comandos de GX y la reverb estándar), y una dirección que
 falta lo detiene. `patches/wiicompiled/foreign-game-lazy-constants.patch` hace
 que esas cinco se busquen solo cuando se usan, y este juego nunca las usa.
 
+La segunda prueba llegó mucho más lejos: el sistema, el disco, el video, los
+gráficos y el audio nativo arrancaron, y el código del juego empezó a correr.
+Luego se congeló en el primer cuadro. El hilo de streaming de sonido
+(0x8006F8B0) revisa tres variables para siempre sin esperar nunca: en el Wii el
+sistema le quita el procesador cuando otro hilo está listo, pero en WiiCompiled
+los hilos solo cambian cuando uno espera, así que ese hilo se quedaba con todo.
+La carga de archivos (0x8000BCDC) espera igual, dando vueltas sobre una
+bandera. `patches/wiicompiled/trauma-center-waits.patch` reemplaza esas dos
+funciones por nativas que hacen lo mismo y esperan el siguiente retrace donde
+el juego daba vueltas.
+
 ---
 
 ## English
@@ -148,3 +159,13 @@ before `main`; five of them do not exist in this game (the GX display lists and
 the standard reverb), and a missing address stops it.
 `patches/wiicompiled/foreign-game-lazy-constants.patch` makes those five be
 looked up only when used, and this game never uses them.
+
+The second test went much further: the system, the disc, video, graphics and
+the native audio started, and the game's own code began to run. Then it froze
+on its first frame. The sound streaming thread (0x8006F8B0) checks three
+variables forever and never waits: on the Wii the OS takes the processor away
+when another thread is ready, but WiiCompiled's threads only switch when one
+waits, so that thread kept everything. Loading a file (0x8000BCDC) waits the
+same way, spinning on a flag. `patches/wiicompiled/trauma-center-waits.patch`
+replaces both with natives that do the same and wait for the next retrace
+where the game spun.

@@ -1,0 +1,163 @@
+diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
+new file mode 100644
+index 0000000..1956547
+--- /dev/null
++++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
+@@ -0,0 +1,157 @@
++// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
++// for the next retrace instead.
++//
++// On the Wii, the OS takes the processor away from a thread whenever a more important one is ready
++// (on every retrace, when a disc read finishes...), so a thread can wait by checking a flag over and
++// over. WiiCompiled's threads only switch when a thread waits through the OS (OSSleepThread,
++// VIWaitForRetrace...), so a thread that spins keeps the processor, nothing else runs, and the flag
++// it waits for is never set: the game freezes. Each native below does exactly what the game's code
++// does, with a VIWaitForRetrace where the game spun.
++//
++// En el Wii, el sistema le quita el procesador a un hilo cuando otro más importante está listo, así
++// que un hilo puede esperar revisando una bandera una y otra vez. En WiiCompiled los hilos solo
++// cambian cuando uno espera a través del sistema, así que ese hilo se queda con el procesador y el
++// juego se congela. Cada función de abajo hace lo mismo que el código del juego, pero espera el
++// siguiente retrace donde el juego daba vueltas.
++
++#include "guest_abi/cpu_context.h"
++#include "guest_abi/dispatch.h"
++#include "hle_stubs.h"
++#include "memory.h"
++
++#include <cstdint>
++#include <initializer_list>
++
++namespace TraumaCenterWaits {
++namespace {
++
++constexpr uint32_t kVIWaitForRetrace = 0x80144418u;
++
++// Calls a function of the game with up to four arguments and gives back r3.
++uint32_t Call(uint32_t function, CpuContext* ctx, std::initializer_list<uint32_t> arguments) {
++    uint32_t reg = 3;
++    for (const uint32_t argument : arguments) {
++        ctx->gpr[reg++] = argument;
++    }
++    InvokeIndirectCpu(function, ctx);
++    return ctx->gpr[3];
++}
++
++void WaitForRetrace(CpuContext* ctx) {
++    InvokeIndirectCpu(kVIWaitForRetrace, ctx);
++}
++
++// ---------------------------------------------------------------- the sound streaming thread
++//
++// The thread at 0x8006F8B0 (started by cadThread.cpp's helper 0x80016A08 right after AIInit and
++// AXInit) checks three sound slots forever and never blocks. One pass:
++//   0x803A76E4  a sound whose record (+0x38) is marked done (+0x4C == 1): its channel's state byte
++//               (0x803A76A0 + the channel at +9) becomes 2 and the mark is cleared;
++//   0x803A76E0  the same, once 0x801FE570 (the channel's two records, second argument 1) returns 1,
++//               and then +0xA becomes 2 too;
++//   0x803A76E8  the same as the one before, with the second argument 0.
++
++constexpr uint32_t kDoneSlot = 0x803A76E4u;
++constexpr uint32_t kFirstStreamSlot = 0x803A76E0u;
++constexpr uint32_t kSecondStreamSlot = 0x803A76E8u;
++constexpr uint32_t kChannelStates = 0x803A76A0u;
++constexpr uint32_t kStreamRecords = 0x802B1490u;  // 0xD8 bytes per channel
++constexpr uint32_t kStreamRequests = 0x802B1728u; // 0x2C bytes per channel
++constexpr uint32_t kStreamStep = 0x801FE570u;
++constexpr uint8_t kStateFinished = 2;
++
++// The record of the sound a slot points at, or 0 when the slot is empty or the sound is not done.
++uint32_t DoneRecord(uint32_t slot) {
++    const uint32_t sound = Memory::Read32(slot);
++    if (sound == 0) {
++        return 0;
++    }
++    const uint32_t record = Memory::Read32(sound + 0x38u);
++    return Memory::Read8(record + 0x4Cu) == 1 ? record : 0;
++}
++
++void MarkFinished(uint32_t record) {
++    Memory::Write8(kChannelStates + Memory::Read8(record + 0x09u), kStateFinished);
++    Memory::Write8(record + 0x4Cu, 0);
++}
++
++void CheckStream(uint32_t slot, uint32_t secondArgument, CpuContext* ctx) {
++    const uint32_t record = DoneRecord(slot);
++    if (record == 0) {
++        return;
++    }
++    const uint32_t channel = Memory::Read8(record + 0x09u);
++    const uint32_t finished = Call(kStreamStep, ctx,
++                                   {kStreamRecords + channel * 0xD8u, secondArgument,
++                                    kStreamRequests + channel * 0x2Cu, 0});
++    if (finished != 1) {
++        return;
++    }
++    Memory::Write8(record + 0x0Au, kStateFinished);
++    MarkFinished(record);
++}
++
++// ---------------------------------------------------------------- loading a file and waiting for it
++//
++// 0x8000BCDC (cadFile.cpp, line 0x1BB) loads a file and returns its data. When the file is already
++// in memory (0x8011A7E8 finds it) it answers at once; otherwise 0x8000BE60 starts a read and returns
++// its request, and the function spins until bit 0 of the request's first word says the read is done.
++//   request +0x40  the size, written to *r4 when r4 is not 0
++//   request +0x4C  the data, returned
++// 0x8000C354 allocates and 0x8000C444 frees (both cadFile.cpp's own); 0x80094A58 records the source
++// line for the allocator.
++
++constexpr uint32_t kCadFileName = 0x802284D8u; // "cadFile.cpp"
++constexpr uint32_t kNoteSourceLine = 0x80094A58u;
++constexpr uint32_t kAllocate = 0x8000C354u;
++constexpr uint32_t kFree = 0x8000C444u;
++constexpr uint32_t kFindLoaded = 0x8011A7E8u;
++constexpr uint32_t kStartLoad = 0x8000BE60u;
++
++} // namespace
++} // namespace TraumaCenterWaits
++
++// 0x8006F8B0: the sound streaming thread's entry. It never returns, like the original.
++extern "C" void TraumaCenterSoundThreadLoop(CpuContext* ctx) {
++    using namespace TraumaCenterWaits;
++    for (;;) {
++        if (const uint32_t record = DoneRecord(kDoneSlot)) {
++            MarkFinished(record);
++        }
++        CheckStream(kFirstStreamSlot, 1, ctx);
++        CheckStream(kSecondStreamSlot, 0, ctx);
++        WaitForRetrace(ctx);
++    }
++}
++FOREIGN_GAME_WRAPPER(RKDEEB, 8006F8B0, TraumaCenterSoundThreadLoop);
++
++// 0x8000BCDC: load a file (r3 its name, r5 passed along) and wait for it; the size goes to *r4.
++extern "C" void TraumaCenterLoadFile(CpuContext* ctx) {
++    using namespace TraumaCenterWaits;
++    const uint32_t name = ctx->gpr[3];
++    const uint32_t sizeOut = ctx->gpr[4];
++    const uint32_t extra = ctx->gpr[5];
++
++    Call(kNoteSourceLine, ctx, {kCadFileName, 0x1BBu});
++    const uint32_t block = Call(kAllocate, ctx, {0x50u});
++    const uint32_t found = Call(kFindLoaded, ctx, {name, block + 0x40u, extra});
++    Memory::Write32(block + 0x4Cu, found);
++
++    uint32_t request = block;
++    if (found != 0) {
++        Memory::Write32(sizeOut, Memory::Read32(block + 0x40u)); // the game does not check r4 here
++    } else {
++        // Like the game, the block allocated above is not freed on this path.
++        request = Call(kStartLoad, ctx, {name, extra});
++        while ((Memory::Read32(request) & 1u) == 0) {
++            WaitForRetrace(ctx);
++        }
++        if (sizeOut != 0) {
++            Memory::Write32(sizeOut, Memory::Read32(request + 0x40u));
++        }
++    }
++    const uint32_t data = Memory::Read32(request + 0x4Cu);
++    Call(kFree, ctx, {request});
++    ctx->gpr[3] = data;
++}
++FOREIGN_GAME_WRAPPER(RKDEEB, 8000BCDC, TraumaCenterLoadFile);
