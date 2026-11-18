@@ -114,7 +114,7 @@ def test_the_address_lines_are_sorted_and_must_agree():
 
 
 def test_the_game_boots_under_ios9_with_the_number_in_the_high_half():
-    # Assumed from the launch titles until the disc's TMD is read; see IOS_NUMBER in the tool.
+    # The disc's TMD names IOS9 (system title 00000001-00000009).
     assert IOS_VERSION >> 16 == 9
     assert IOS_VERSION & 0xFFFF == 1034
 

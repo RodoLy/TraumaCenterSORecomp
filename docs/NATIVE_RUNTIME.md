@@ -63,8 +63,8 @@ Lo que se aprendió en el camino:
   nombre; esas corren traducidas.
 - `tools/name_from_reference_game.py` nombró 83 funciones del SDK copiando los
   nombres de Animal Parade donde el código es idéntico.
-- El IOS (9) se supone, porque el TMD del disco todavía no se lee; el `OSInit`
-  de este juego no se detiene si no coincide.
+- El IOS es el 9, como dice el TMD del disco; el `OSInit` de este juego no se
+  detiene si no coincide.
 
 ### Lo que sigue
 
@@ -133,8 +133,8 @@ What was learned on the way:
   game does not have or that are not named yet; those run translated.
 - `tools/name_from_reference_game.py` named 83 SDK functions by copying Animal
   Parade's names where the code is identical.
-- The IOS (9) is assumed, because the disc's TMD is not read yet; this game's
-  `OSInit` does not stop when it differs.
+- The IOS is 9, as the disc's TMD says; this game's `OSInit` does not stop when
+  it differs.
 
 ### What comes next
 

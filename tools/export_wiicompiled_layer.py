@@ -219,12 +219,12 @@ FACTS = (
 )
 ARENA_LO = 0x803BBB40
 
-# The IOS the game boots under. Not read from the disc yet: the TMD sits in the partition header, which
-# tools/rvz.py does not read. The Wii's launch titles boot under IOS9, whose last release is 1034
-# (0x40A). Unlike Animal Parade's, this game's older OSInit does not stop when the IOS in low memory
-# (0x80003140) is another one: it only reports it (ReportOSInfo, __OSGetIOSRev).
-# El IOS con el que arranca el juego. Todavía no se lee del disco; los juegos de lanzamiento del Wii
-# usan IOS9. A diferencia de Animal Parade, el OSInit de este juego no se detiene si es otro.
+# The IOS the game boots under: the TMD of its disc's game partition names IOS9 (system title
+# 00000001-00000009), read with tools/rvz.py's tables. IOS9's last release is 1034 (0x40A). Unlike
+# Animal Parade's, this game's older OSInit does not stop when the IOS in low memory (0x80003140) is
+# another one: it only reports it (ReportOSInfo, __OSGetIOSRev).
+# El IOS con el que arranca el juego: el TMD del disco dice IOS9. A diferencia de Animal Parade, el
+# OSInit de este juego no se detiene si es otro.
 IOS_NUMBER = 9
 IOS_RELEASE = 1034
 IOS_VERSION = (IOS_NUMBER << 16) | IOS_RELEASE
