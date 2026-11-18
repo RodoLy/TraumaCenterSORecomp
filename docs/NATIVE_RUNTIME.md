@@ -60,7 +60,11 @@ Lo que se aprendió en el camino:
 - `tools/export_wiicompiled_layer.py` coloca 260 de las 582 funciones nativas
   de WiiCompiled en las direcciones de este juego (Animal Parade: 302). Las que
   faltan son funciones del SDK que este juego no tiene o que todavía no tienen
-  nombre; esas corren traducidas.
+  nombre; esas corren traducidas. Hay que correrla sobre un clon de
+  WiiCompiled con los parches de `patches/wiicompiled/` ya aplicados: algunas
+  nativas (por ejemplo `C_MTXPerspective`) solo existen después del parche. Sin
+  ellas el ejecutable se detiene al arrancar con «Stale generated indirect
+  dispatch winner».
 - `tools/name_from_reference_game.py` nombró 83 funciones del SDK copiando los
   nombres de Animal Parade donde el código es idéntico.
 - El IOS es el 9, como dice el TMD del disco; el `OSInit` de este juego no se
@@ -145,7 +149,11 @@ What was learned on the way:
 - `wiicompiled/RKDEEB-MAP.txt`: the 7838 functions, from `tools/export_wiicompiled_map.py`.
 - `tools/export_wiicompiled_layer.py` places 260 of WiiCompiled's 582 natives
   at this game's addresses (Animal Parade: 302). The rest are SDK functions this
-  game does not have or that are not named yet; those run translated.
+  game does not have or that are not named yet; those run translated. Run it on
+  a WiiCompiled clone with the patches in `patches/wiicompiled/` already
+  applied: some natives (for example `C_MTXPerspective`) only exist after the
+  patch. Without them the executable stops at startup with "Stale generated
+  indirect dispatch winner".
 - `tools/name_from_reference_game.py` named 83 SDK functions by copying Animal
   Parade's names where the code is identical.
 - The IOS is 9, as the disc's TMD says; this game's `OSInit` does not stop when
