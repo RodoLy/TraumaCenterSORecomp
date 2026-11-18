@@ -9,6 +9,11 @@
 # El runtime ejecuta él mismo los constructores estáticos del DOL, del inicio de .ctors a su final. El
 # final es donde empieza .dtors, y el código que recorre cada tabla nombra su inicio.
 #
+# Carried over from the Animal Parade port with tools/port_addresses.py, then finished by hand where
+# this game's older SDK differs; every row is checked by tests/test_wiicompiled_addresses.py.
+# Pasado del port de Animal Parade con tools/port_addresses.py y terminado a mano donde el SDK más
+# viejo de este juego cambia; cada fila la comprueba tests/test_wiicompiled_addresses.py.
+#
 # covers: runtime/src/system_bridge.cpp runtime/src/main.cpp
 
 0x800060A4  0x80006124  __start, where the game begins: the DOL's entry point  entry point

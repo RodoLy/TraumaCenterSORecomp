@@ -4,18 +4,23 @@
 # The columns are those of RKDEEB-os-addresses.txt; tests/test_wiicompiled_addresses.py checks every row.
 # Las columnas son las de RKDEEB-os-addresses.txt.
 #
-# vi.c's small variables sit 0x332DA08 bytes further on than in Mario Kart Wii, in the same order; its
-# HorVer structure (the timing and size of the picture) 0x2C3030 bytes further on.
+# Carried over from the Animal Parade port with tools/port_addresses.py, then finished by hand where
+# this game's older SDK differs; every row is checked by tests/test_wiicompiled_addresses.py.
+# Pasado del port de Animal Parade con tools/port_addresses.py y terminado a mano donde el SDK más
+# viejo de este juego cambia; cada fila la comprueba tests/test_wiicompiled_addresses.py.
+#
+# This game's vi.c is older: its small variables are not in the same order as in Mario Kart Wii, so
+# each was found by what the code does with it (the callbacks by the order __VIRetraceHandler calls them).
 #
 # covers: runtime/src/hle/vi.cpp
 
 # ---------------------------------------------------------------- vi.c (.sbss)
-0x80386B38  ?           IsInitialized                                   ? VIInit reaches 105 addresses there and 102 here, and no other evidence
-0x80386B44  ?           the guard VIInit sets before the retrace interrupt runs  ? VIInit reaches 105 addresses there and 102 here, and no other evidence
-0x80386BA0  ?           the next frame buffer the retrace interrupt hands to the hardware  ? no function like 0x80268450, and no other evidence
+0x80386B38  0x803A7A48  IsInitialized                                   VIInit
+0x80386B44  0x803A7A54  the guard VIInit sets before the retrace interrupt runs  VIInit
+0x80386BA0  0x803A7AA4  the next frame buffer the retrace interrupt hands to the hardware  __VIRetraceHandler
 0x80386BA8  0x803A7AAC  the TV format                                   VIGetTvFormat
-0x80386BB4  ?           PostCB, the callback after each retrace         ? no function like VISetPostRetraceCallback, and no other evidence
-0x80386BB8  ?           PreCB, the callback before each retrace         ? no function like VISetPreRetraceCallback, and no other evidence
+0x80386BB4  0x803A7AB8  PostCB, the callback after each retrace         __VIRetraceHandler
+0x80386BB8  0x803A7ABC  PreCB, the callback before each retrace         __VIRetraceHandler
 0x80386BC0  0x803A7AC0  the thread queue VIWaitForRetrace sleeps on     VIWaitForRetrace
 0x80386BE4  0x803A7AE0  the retrace count                               VIWaitForRetrace
 

@@ -5,18 +5,21 @@
 # The columns are those of RKDEEB-os-addresses.txt; tests/test_wiicompiled_addresses.py checks every row.
 # Las columnas son las de RKDEEB-os-addresses.txt.
 #
+# Carried over from the Animal Parade port with tools/port_addresses.py, then finished by hand where
+# this game's older SDK differs; every row is checked by tests/test_wiicompiled_addresses.py.
+# Pasado del port de Animal Parade con tools/port_addresses.py y terminado a mano donde el SDK más
+# viejo de este juego cambia; cada fila la comprueba tests/test_wiicompiled_addresses.py.
+#
 # WiiCompiled's DVD reads the extracted folder, but it still sets the SDK's own flags so that what runs
-# translated (DVDCancel, __DVDPrepareReset...) finds the drive idle. This game's dvd.c is newer than Mario
-# Kart Wii's and has more variables, so its small ones are not at one distance from Mario Kart Wii's:
-# each is found by what the code does with it, and two are not found yet (the runtime skips them in this
-# game).
+# translated (DVDCancel, __DVDPrepareReset...) finds the drive idle. Each small variable is found by what
+# the code does with it; two that Animal Parade could not find are not found here either.
 #
 # covers: runtime/src/hle/storage
 
 # ---------------------------------------------------------------- functions
 0x8015DF1C  0x80151E4C  __DVDFSInit                                     name
 0x80169BCC  0x80166104  ISFS_OpenLib                                    name
-0x80193040  ?           IPCSetBufferLo                                  ? no function like IPCSetBufferLo
+0x80193040  0x801643FC  IPCSetBufferLo                                  name
 0x801949B8  0x80165A1C  iosCreateHeap                                   name
 
 # ---------------------------------------------------------------- dvdqueue.c, dvd.c (.bss)
@@ -28,7 +31,7 @@
 0x80386668  -           ResumeFromHere: not found yet in this game      -
 0x80386670  0x803A7B90  PausingFlag: DVDResume clears it and restarts the drive  DVDResume
 0x8038667C  -           what DVDCancelAll waits on: not found yet in this game  -
-0x803866A0  ?           DVDInitialized: DVDInit returns at once when it is set  ? DVDInit reaches 16 addresses there and 13 here, and no other evidence
+0x803866A0  0x803A7BC4  DVDInitialized: DVDInit returns at once when it is set  DVDInit
 0x803866A8  0x803A7BCC  what __DVDPrepareReset waits on, set by its callback  __DVDPrepareReset
 0x803866F0  0x803A7C08  executing, the command block in progress: DVDGetDriveStatus reads its state  DVDGetDriveStatus
 
@@ -38,7 +41,7 @@
 0x80386725  0x803A7C2D  DVDLowInit ran (a byte)                         DVDLowInit
 
 # ---------------------------------------------------------------- NAND, ISFS, IPC
-0x80346D20  ?           the home directory NANDInit fills (the title's data folder)  ? NANDInit reaches 7 addresses there and 11 here, and no other evidence
+0x80346D20  0x8030EEC0  the home directory NANDInit fills (the title's data folder)  NANDInit
 0x80385920  0x803A7050  __ISFS_fd, the handle of /dev/fs (starts at -1)  ISFS_OpenLib
 0x80385928  0x803A7058  __ISFS_path, "/dev/fs"                          ISFS_OpenLib
 0x80386770  0x803A7054  the ISFS heap is made                           ISFS_OpenLib
@@ -48,4 +51,4 @@
 0x80386784  0x803A7E28  the handle of the ISFS heap                     ISFS_Open
 0x803867EC  0x803A7DEC  IPCBufferLo                                     IPCInit
 0x803867F0  0x803A7DF0  IPCBufferHi                                     IPCGetBufferHi
-0x80386848  ?           NAND's state (2 once NANDInit is done)          ? NANDInit reaches 7 addresses there and 11 here, and no other evidence
+0x80386848  0x803A7DC8  NAND's state (2 once NANDInit is done)          NANDInit

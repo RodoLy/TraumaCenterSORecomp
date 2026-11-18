@@ -9,6 +9,11 @@
 # El runtime de WiiCompiled nombra 25 direcciones de Mario Kart Wii en su OS. Para usar esas funciones
 # nativas aquí, cada una necesita la dirección de este juego. La prueba comprueba cada fila contra main.dol.
 #
+# Carried over from the Animal Parade port with tools/port_addresses.py, then finished by hand where
+# this game's older SDK differs; every row is checked by tests/test_wiicompiled_addresses.py.
+# Pasado del port de Animal Parade con tools/port_addresses.py y terminado a mano donde el SDK más
+# viejo de este juego cambia; cada fila la comprueba tests/test_wiicompiled_addresses.py.
+#
 # covers: runtime/src/hle/os runtime/src/fiber_manager.cpp
 #
 # Columns / Columnas:
@@ -31,7 +36,7 @@
 0x801AADE0  0x8013EC7C  __OSTimeToSystemTime (for the fire times of alarms)  name
 0x801A8088  0x8013C5F8  __OSUnlockAllMutex                              name
 0x801AA0F0  0x8013E1F0  OSExitThread (the return address of every new thread)  name
-0x801ABC0C  ?           __OSDefaultPowerCallback                        ? no function like __OSDefaultPowerCallback
+0x801ABC0C  0x8013F430  __OSDefaultPowerCallback                        name
 0x80192F7C  0x80164380  IPCInit                                         name
 
 # ---------------------------------------------------------------- OSThread.c
