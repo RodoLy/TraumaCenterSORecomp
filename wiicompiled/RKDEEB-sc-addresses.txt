@@ -8,5 +8,5 @@
 # covers: runtime/src/hle/sc.cpp
 
 0x8029CEB0  0x80274320  the table of AREA names: JPN, USA, EUR... (five bytes each)  SCGetProductArea
-0x8029CEF8  ?           the table of GAME names: JP, US, EU... (four bytes each; 0x48 after the first in both)  ? no function like SCGetProductGameRegion
+0x8029CEF8  ?           the table of GAME names: JP, US, EU... (four bytes each; 0x48 after the first in both)  ? no function like SCGetProductGameRegion, and no other evidence
 0x803869E0  -           the buffer of SCGetProductCode: this game does not seem to call it  -

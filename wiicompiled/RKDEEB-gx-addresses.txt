@@ -19,17 +19,17 @@
 
 # ---------------------------------------------------------------- GXInit.c, GXFifo.c, GXDisplayList.c (.bss)
 0x80343740  0x802EEA70  the FIFO object GXInit sets up                  GXInit
-0x803437C0  ?           __GXData, the structure `gx` points at          ? held in a data word: find the word by hand
+0x803437C0  0x802EEAF0  __GXData, the structure `gx` points at          held at 0x803AAD58
 0x80343DC0  0x803A7B48  GPFifo, the FIFO object the GPU reads           GXSetGPFifo
 0x80343DE4  0x802EF114  CPUFifo, the FIFO object the CPU writes         GXSetCPUFifo
-0x80344090  ?           DisplayListFifo: base                           ? no function like GXBeginDisplayList
-0x80344094  ?           DisplayListFifo: top                            ? no function like GXBeginDisplayList
-0x80344098  ?           DisplayListFifo: size                           ? no function like GXBeginDisplayList
-0x803440A4  ?           DisplayListFifo: read pointer                   ? no function like GXBeginDisplayList
-0x803440A8  ?           DisplayListFifo: write pointer                  ? no function like GXBeginDisplayList
-0x803440AC  ?           DisplayListFifo: count                          ? no function like GXBeginDisplayList
-0x80344110  ?           __savedGXdata, the 0x600 bytes of `gx` kept while a list is made  ? no function like GXBeginDisplayList
-0x80344710  ?           OldCPUFifo, the CPU FIFO to go back to          ? no function like GXEndDisplayList
+0x80344090  ?           DisplayListFifo: base                           ? no function like GXBeginDisplayList, and no other evidence
+0x80344094  ?           DisplayListFifo: top                            ? no function like GXBeginDisplayList, and no other evidence
+0x80344098  ?           DisplayListFifo: size                           ? no function like GXBeginDisplayList, and no other evidence
+0x803440A4  ?           DisplayListFifo: read pointer                   ? no function like GXBeginDisplayList, and no other evidence
+0x803440A8  ?           DisplayListFifo: write pointer                  ? no function like GXBeginDisplayList, and no other evidence
+0x803440AC  ?           DisplayListFifo: count                          ? no function like GXBeginDisplayList, and no other evidence
+0x80344110  ?           __savedGXdata, the 0x600 bytes of `gx` kept while a list is made  ? no function like GXBeginDisplayList, and no other evidence
+0x80344710  ?           OldCPUFifo, the CPU FIFO to go back to          ? no function like GXEndDisplayList, and no other evidence
 
 # ---------------------------------------------------------------- the small ones (.sbss, .sdata2)
 0x803867B0  0x803A7B30  CPGPLinked (a byte): the CPU and GPU FIFOs are the same  GXSetCPUFifo

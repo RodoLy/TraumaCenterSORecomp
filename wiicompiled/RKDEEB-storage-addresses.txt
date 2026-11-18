@@ -28,17 +28,17 @@
 0x80386668  -           ResumeFromHere: not found yet in this game      -
 0x80386670  0x803A7B90  PausingFlag: DVDResume clears it and restarts the drive  DVDResume
 0x8038667C  -           what DVDCancelAll waits on: not found yet in this game  -
-0x803866A0  ?           DVDInitialized: DVDInit returns at once when it is set  ? DVDInit reaches 16 addresses there and 13 here
+0x803866A0  ?           DVDInitialized: DVDInit returns at once when it is set  ? DVDInit reaches 16 addresses there and 13 here, and no other evidence
 0x803866A8  0x803A7BCC  what __DVDPrepareReset waits on, set by its callback  __DVDPrepareReset
 0x803866F0  0x803A7C08  executing, the command block in progress: DVDGetDriveStatus reads its state  DVDGetDriveStatus
 
 # ---------------------------------------------------------------- dvd_low.c (.sbss)
 0x80386720  0x803A7C28  the context the low level uses next             DVDLowInit
 0x80386724  0x803A7C2C  the contexts are set up (a byte)                DVDLowInit
-0x80386725  ?           DVDLowInit ran (a byte)                         ? no function like DVDLowFinalize
+0x80386725  0x803A7C2D  DVDLowInit ran (a byte)                         DVDLowInit
 
 # ---------------------------------------------------------------- NAND, ISFS, IPC
-0x80346D20  ?           the home directory NANDInit fills (the title's data folder)  ? NANDInit reaches 7 addresses there and 11 here
+0x80346D20  ?           the home directory NANDInit fills (the title's data folder)  ? NANDInit reaches 7 addresses there and 11 here, and no other evidence
 0x80385920  0x803A7050  __ISFS_fd, the handle of /dev/fs (starts at -1)  ISFS_OpenLib
 0x80385928  0x803A7058  __ISFS_path, "/dev/fs"                          ISFS_OpenLib
 0x80386770  0x803A7054  the ISFS heap is made                           ISFS_OpenLib
@@ -46,6 +46,6 @@
 0x8038677C  0x803A7E20  the low end of the IPC arena ISFS takes its heap from  ISFS_OpenLib
 0x80386780  0x803A7E24  the high end of that arena                      ISFS_OpenLib
 0x80386784  0x803A7E28  the handle of the ISFS heap                     ISFS_Open
-0x803867EC  ?           IPCBufferLo                                     ? no function like IPCGetBufferLo
+0x803867EC  0x803A7DEC  IPCBufferLo                                     IPCInit
 0x803867F0  0x803A7DF0  IPCBufferHi                                     IPCGetBufferHi
-0x80386848  ?           NAND's state (2 once NANDInit is done)          ? NANDInit reaches 7 addresses there and 11 here
+0x80386848  ?           NAND's state (2 once NANDInit is done)          ? NANDInit reaches 7 addresses there and 11 here, and no other evidence

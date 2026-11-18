@@ -10,20 +10,20 @@
 # covers: runtime/src/hle/vi.cpp
 
 # ---------------------------------------------------------------- vi.c (.sbss)
-0x80386B38  ?           IsInitialized                                   ? VIInit reaches 105 addresses there and 102 here
-0x80386B44  ?           the guard VIInit sets before the retrace interrupt runs  ? VIInit reaches 105 addresses there and 102 here
-0x80386BA0  ?           the next frame buffer the retrace interrupt hands to the hardware  ? no function like 0x80268450
+0x80386B38  ?           IsInitialized                                   ? VIInit reaches 105 addresses there and 102 here, and no other evidence
+0x80386B44  ?           the guard VIInit sets before the retrace interrupt runs  ? VIInit reaches 105 addresses there and 102 here, and no other evidence
+0x80386BA0  ?           the next frame buffer the retrace interrupt hands to the hardware  ? no function like 0x80268450, and no other evidence
 0x80386BA8  0x803A7AAC  the TV format                                   VIGetTvFormat
-0x80386BB4  ?           PostCB, the callback after each retrace         ? no function like VISetPostRetraceCallback
-0x80386BB8  ?           PreCB, the callback before each retrace         ? no function like VISetPreRetraceCallback
+0x80386BB4  ?           PostCB, the callback after each retrace         ? no function like VISetPostRetraceCallback, and no other evidence
+0x80386BB8  ?           PreCB, the callback before each retrace         ? no function like VISetPreRetraceCallback, and no other evidence
 0x80386BC0  0x803A7AC0  the thread queue VIWaitForRetrace sleeps on     VIWaitForRetrace
-0x80386BE4  ?           the retrace count                               ? no function like VIGetRetraceCount
+0x80386BE4  0x803A7AE0  the retrace count                               VIWaitForRetrace
 
 # ---------------------------------------------------------------- HorVer (.bss)
-0x80350864  ?           HorVer: the width of the picture                ? VIConfigure reaches 58 addresses there and 62 here
-0x80350866  ?           HorVer: the height of the picture               ? VIConfigure reaches 58 addresses there and 62 here
-0x80350872  ?           HorVer: the width of the frame buffer           ? VIConfigure reaches 58 addresses there and 62 here
-0x8035087C  ?           HorVer: the height of the frame buffer          ? VIConfigure reaches 58 addresses there and 62 here
+0x80350864  0x802EE95C  HorVer: the width of the picture                VIConfigurePan
+0x80350866  0x802EE95E  HorVer: the height of the picture               VIConfigurePan
+0x80350872  0x802EE96A  HorVer: the width of the frame buffer           VIConfigurePan
+0x8035087C  0x802EE974  HorVer: the height of the frame buffer          VIConfigurePan
 0x80350890  0x802EE988  HorVer: the frame buffer VISetNextFrameBuffer was given  VISetNextFrameBuffer
 
 # ---------------------------------------------------------------- Mario Kart Wii only

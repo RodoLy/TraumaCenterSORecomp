@@ -16,20 +16,20 @@
 0x80126948  ?           __AXDSPInitCallback (the task's init_cb, at 0x28)  ? no function like __AXDSPInitCallback
 0x80126954  ?           __AXDSPResumeCallback (res_cb, at 0x2C)         ? no function like __AXDSPResumeCallback
 0x801269A8  ?           __AXDSPRequestCallback (done_cb, at 0x30)       ? no function like __AXDSPRequestCallback
-0x801269B8  ?           the next function, four bytes long (req_cb, at 0x34); neither map names it  ? no function like 0x80270AB0
+0x801269B8  ?           the next function, four bytes long (req_cb, at 0x34); neither map names it  ? no function like 0x80270AB0, and no other evidence
 
 # ---------------------------------------------------------------- AXOut.c: the task and its microcode
-0x802F81A0  ?           AX's DSP task                                   ? no function like 0x80270AB0
-0x8027F820  ?           AX's microcode, which the task loads into the DSP's IRAM  ? no function like 0x80270AB0
-0x802F8200  ?           the DRAM the task sends the DSP (0x60 bytes after the task)  ? no function like 0x80270AB0
-0x80385800  ?           the DSP's start address for the microcode       ? no function like 0x80270AB0
-0x80385802  ?           the DSP's resume address                        ? no function like 0x80270AB0
-0x80385804  ?           the microcode's length                          ? no function like 0x80270AB0
-0x80386524  ?           a flag __AXOutInitDSP clears before it adds the task  ? no function like 0x80270AB0
-0x80386528  ?           set by __AXDSPInitCallback once the DSP runs AX; __AXOutInitDSP waits on it  ? no function like __AXDSPInitCallback
+0x802F81A0  ?           AX's DSP task                                   ? no function like 0x80270AB0, and no other evidence
+0x8027F820  ?           AX's microcode, which the task loads into the DSP's IRAM  ? no function like 0x80270AB0, and no other evidence
+0x802F8200  ?           the DRAM the task sends the DSP (0x60 bytes after the task)  ? no function like 0x80270AB0, and no other evidence
+0x80385800  ?           the DSP's start address for the microcode       ? no function like 0x80270AB0, and no other evidence
+0x80385802  ?           the DSP's resume address                        ? no function like 0x80270AB0, and no other evidence
+0x80385804  ?           the microcode's length                          ? no function like 0x80270AB0, and no other evidence
+0x80386524  ?           a flag __AXOutInitDSP clears before it adds the task  ? no function like 0x80270AB0, and no other evidence
+0x80386528  ?           set by __AXDSPInitCallback once the DSP runs AX; __AXOutInitDSP waits on it  ? no function like __AXDSPInitCallback, and no other evidence
 
 # ---------------------------------------------------------------- ai.c (.sbss, 0x332E1F8 further on)
-0x80386448  ?           the flag AIInit sets                            ? no function like AICheckInit
+0x80386448  0x803A7C48  the flag AIInit sets                            AIInit
 0x8038644C  0x803A7C4C  whether the DMA callback is running             __AIDHandler
 0x8038647C  0x803A7C7C  whether the DMA callback runs on its own stack  __AICallbackStackSwitch
 0x80386480  0x803A7C80  the DMA callback                                __AIDHandler
@@ -40,9 +40,9 @@
 0x80386614  0x803A7DB4  the task DSPAssertTask asked for                DSPAssertTask
 0x80386618  0x803A7DB8  the next word, which DSPInit clears             DSPInit
 0x8038661C  0x803A7DBC  __DSP_curr_task                                 DSPInit
-0x80386620  ?           __DSP_first_task                                ? no function like DSPAddTask
+0x80386620  0x803A7DC0  __DSP_first_task                                DSPInit
 0x80386624  0x803A7DC4  the task that runs                              DSPAssertTask
 
 # ---------------------------------------------------------------- AXFXReverbStdExp (.sdata2)
-0x80388588  ?           1.0, which the reverb's callback loads          ? no function like AXFXReverbStdExpCallback
-0x8038858C  ?           0.6, the scale of what is sent to the reverb    ? no function like AXFXReverbStdExpCallback
+0x80388588  ?           1.0, which the reverb's callback loads          ? no function like AXFXReverbStdExpCallback, and no other evidence
+0x8038858C  ?           0.6, the scale of what is sent to the reverb    ? no function like AXFXReverbStdExpCallback, and no other evidence
