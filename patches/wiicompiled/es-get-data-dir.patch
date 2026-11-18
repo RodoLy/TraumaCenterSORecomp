@@ -1,0 +1,39 @@
+diff --git a/runtime/src/hle/storage/nand_isfs.cpp b/runtime/src/hle/storage/nand_isfs.cpp
+--- a/runtime/src/hle/storage/nand_isfs.cpp
++++ b/runtime/src/hle/storage/nand_isfs.cpp
+@@ -61,6 +61,9 @@
+ static constexpr int32_t ES_DEV_FD = 3;
+ static constexpr int32_t DOLPHIN_DEV_FD = 4;
+ static constexpr uint32_t ES_IOCTL_GETDEVICEID = 0x07;
++// ES_GetDataDir: the game's save folder for a title, "/title/<hi>/<lo>/data". Games built on an early
++// SDK ask /dev/es for it directly (Trauma Center: Second Opinion does, from _ES_GetDataDir).
++static constexpr uint32_t ES_IOCTL_GETDATADIR = 0x1D;
+ static constexpr uint32_t ES_IOCTL_GETDEVICECERT = 0x1E;
+ static constexpr uint32_t ES_IOCTL_GETTITLEID = 0x20;
+ static constexpr uint32_t ES_IOCTL_SIGN = 0x30;
+@@ -1122,6 +1125,25 @@
+                     return ISFS_EINVAL;
+                 }
+                 return ISFS_OK;
++            }
++
++            case ES_IOCTL_GETDATADIR: {
++                if (numIn != 1 || numOut != 1) {
++                    return ISFS_EINVAL;
++                }
++                const IosVector in = ReadIosVector(vectorPtr, 0);
++                const IosVector out = ReadIosVector(vectorPtr, 1);
++                if (in.size < 8 || in.address == 0 || !Memory::Contains(in.address, 8)) {
++                    return ISFS_EINVAL;
++                }
++                char path[32];
++                const int length = std::snprintf(path, sizeof(path), "/title/%08x/%08x/data",
++                                                 Memory::Read32(in.address), Memory::Read32(in.address + 4u));
++                if (!WriteGuestBytes(out.address, out.size, reinterpret_cast<const uint8_t*>(path),
++                                     static_cast<size_t>(length) + 1)) {
++                    return ISFS_EINVAL;
++                }
++                return ISFS_OK;
+             }
+ 
+             case ES_IOCTL_GETTITLEID: {
