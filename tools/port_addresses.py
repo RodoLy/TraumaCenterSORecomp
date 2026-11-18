@@ -77,6 +77,24 @@ class Game:
     def function(self, name: str) -> Symbol | None:
         return self.symbols.by_name(name)
 
+    def reached(self, function: Symbol) -> list[int]:
+        cache = self.__dict__.setdefault("_reached", {})
+        if function.address not in cache:
+            cache[function.address] = addresses_in_order(self, function)
+        return cache[function.address]
+
+    def functions_reaching(self, address: int) -> list[Symbol]:
+        """The named functions that reach `address`, built once for the whole program."""
+        index = self.__dict__.get("_reaching")
+        if index is None:
+            index = {}
+            for symbol in self.symbols:
+                if symbol.kind == "function" and not symbol.has_generated_name:
+                    for reached in self.reached(symbol):
+                        index.setdefault(reached, []).append(symbol)
+            self.__dict__["_reaching"] = index
+        return index.get(address, [])
+
     def shape(self, function: Symbol) -> tuple[int, ...]:
         """The function's code with what moves between games masked out: branch targets, and the
         immediates of address parts, loads and stores."""
@@ -185,7 +203,16 @@ def port_row(row: list[str], reference: Game, target: Game, names_found: dict[in
     if evidence == ENTRY_POINT:
         return f"0x{target.dol.entry:08X}", evidence
     if evidence.startswith(HELD_AT):
-        return UNKNOWN, "held in a data word: find the word by hand"
+        # The word that holds the address is itself a variable some functions read: carry the word
+        # over, then read what this game keeps in it.
+        word_there = int(evidence[len(HELD_AT) :], 16)
+        word_here, _ = port_row(
+            [row[0], f"0x{word_there:08X}", "the word", "-no evidence-"], reference, target, names_found
+        )
+        if word_here == UNKNOWN:
+            return UNKNOWN, f"no function reaches the word at 0x{word_there:08X} here"
+        word_here_address = int(word_here, 16)
+        return f"0x{target.dol.u32(word_here_address):08X}", f"{HELD_AT}0x{word_here_address:08X}"
 
     evidence_name = evidence.split()[0]
     there = (
@@ -194,20 +221,48 @@ def port_row(row: list[str], reference: Game, target: Game, names_found: dict[in
         else reference.function(evidence_name)
     )
     here = find_function(reference, target, evidence_name, names_found)
-    if there is None or here is None:
-        return UNKNOWN, f"no function like {evidence_name}"
-    reached_there = addresses_in_order(reference, there)
-    reached_here = addresses_in_order(target, here)
     address = int(reference_address, 16)
-    if address not in reached_there:
-        return UNKNOWN, f"{evidence_name} does not reach it in the reference game"
-    if len(reached_there) != len(reached_here):
-        return UNKNOWN, (
-            f"{evidence_name} reaches {len(reached_there)} addresses there and {len(reached_here)} here"
+    found = _through(reference, target, there, here, address)
+    if found is not None:
+        # An unnamed function is written by its address, which is this game's one from now on.
+        evidence_here = f"0x{here.address:08X}" if evidence_name.startswith("0x") else evidence
+        return f"0x{found:08X}", evidence_here
+
+    # The table's evidence does not work here (the function is missing or was built differently), so
+    # try every other function of the reference game that reaches the variable. They must all agree.
+    # La evidencia de la tabla no sirve aquí; se prueban las demás funciones que alcanzan la variable,
+    # y todas tienen que coincidir.
+    answers: dict[int, str] = {}
+    for other in reference.functions_reaching(address):
+        other_here = target.function(other.name)
+        found = _through(reference, target, other, other_here, address)
+        if found is not None:
+            answers.setdefault(found, other.name)
+    if len(answers) == 1:
+        found, other_name = next(iter(answers.items()))
+        return f"0x{found:08X}", other_name
+    if len(answers) > 1:
+        return UNKNOWN, "other functions disagree: " + ", ".join(
+            f"{name} says 0x{found:08X}" for found, name in answers.items()
         )
-    # An unnamed function is written by its address, which is this game's one from now on.
-    evidence_here = f"0x{here.address:08X}" if evidence_name.startswith("0x") else evidence
-    return f"0x{reached_here[reached_there.index(address)]:08X}", evidence_here
+    if here is None:
+        return UNKNOWN, f"no function like {evidence_name}, and no other evidence"
+    return UNKNOWN, (
+        f"{evidence_name} reaches {len(reference.reached(there))} addresses there and "
+        f"{len(target.reached(here))} here, and no other evidence"
+    )
+
+
+def _through(
+    reference: Game, target: Game, there: Symbol | None, here: Symbol | None, address: int
+) -> int | None:
+    """Where `here` keeps what `there` reaches at `address`, when both reach the same number of things."""
+    if there is None or here is None:
+        return None
+    reached_there, reached_here = reference.reached(there), target.reached(here)
+    if address not in reached_there or len(reached_there) != len(reached_here):
+        return None
+    return reached_here[reached_there.index(address)]
 
 
 def port_table(
