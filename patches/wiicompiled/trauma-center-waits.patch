@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..4804316
+index 0000000..ef9fea6
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,190 @@
+@@ -0,0 +1,213 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -24,9 +24,11 @@ index 0000000..4804316
 +#include "guest_abi/dispatch.h"
 +#include "hle_stubs.h"
 +#include "memory.h"
++#include "runtime_log.h"
 +
 +#include <cstdint>
 +#include <initializer_list>
++#include <string>
 +
 +namespace TraumaCenterWaits {
 +namespace {
@@ -45,6 +47,19 @@ index 0000000..4804316
 +
 +void WaitForRetrace(CpuContext* ctx) {
 +    InvokeIndirectCpu(kVIWaitForRetrace, ctx);
++}
++
++// The file name a load asks for, for the log (at most 63 characters).
++std::string GuestText(uint32_t address) {
++    std::string text;
++    for (uint32_t i = 0; address != 0 && i < 63; ++i) {
++        const char c = static_cast<char>(Memory::Read8(address + i));
++        if (c == 0) {
++            break;
++        }
++        text.push_back(c);
++    }
++    return text;
 +}
 +
 +// ---------------------------------------------------------------- the sound streaming thread
@@ -149,8 +164,16 @@ index 0000000..4804316
 +    } else {
 +        // Like the game, the block allocated above is not freed on this path.
 +        request = Call(kStartLoad, ctx, {name, extra});
++        // A load that never ends leaves the screen black with nothing in the log, so say which file
++        // it is: once when it starts and again if it is still not done after ten seconds.
++        RT_LOG(RT_TAG_MOD) << "[load] " << GuestText(name) << std::endl;
++        uint32_t retraces = 0;
 +        while ((Memory::Read32(request) & 1u) == 0) {
 +            WaitForRetrace(ctx);
++            if (++retraces == 600) {
++                RT_LOG(RT_TAG_MOD) << "[load] still waiting for " << GuestText(name) << " (request 0x"
++                                   << std::hex << request << std::dec << ")" << std::endl;
++            }
 +        }
 +        if (sizeOut != 0) {
 +            Memory::Write32(sizeOut, Memory::Read32(request + 0x40u));
