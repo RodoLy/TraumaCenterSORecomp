@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..326a011
+index 0000000..d04ab83
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,449 @@
+@@ -0,0 +1,510 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -25,6 +25,7 @@ index 0000000..326a011
 +#include "hle_stubs.h"
 +#include "memory.h"
 +#include "runtime_log.h"
++#include "hle/gx/gx_frame_trace.h"
 +
 +#include <cstdint>
 +#include <cstdio>
@@ -292,6 +293,65 @@ index 0000000..326a011
 +} // namespace
 +} // namespace TraumaCenterWaits
 +
++namespace TraumaCenterWaits {
++namespace {
++// The title screen's 2D pieces are drawn every frame but come out with alpha 0. Once a second, log
++// the values an animation would move with (the frame time the main loop computes at -0x7268 and
++// -0x72C8, the bus clock it divides by) and the first words of the TTL DRAW PROC work area, where the
++// title keeps its own step and, likely, its fade. Also take two frame traces by itself (as F9 does),
++// 5 and 20 seconds into the title screen, so no key has to be pressed.
++constexpr uint32_t kFrameTime = 0x803A7458u;      // -0x7268(r13), a float
++constexpr uint32_t kFrameTimeBase = 0x803A73F8u;  // -0x72C8(r13), a float
++constexpr uint32_t kBusClock = 0x800000F8u;
++constexpr int kTitleWords = 24;
++
++uint32_t FindTaskByName(const char* name) {
++    for (uint32_t list : kTaskLists) {
++        uint32_t task = Memory::Read32(list);
++        for (int count = 0; task >= 0x80000000u && task < 0x81800000u && count < 64; ++count) {
++            if (GuestText(task) == name) {
++                return task;
++            }
++            task = Memory::Read32(task + 0x3Cu);
++        }
++    }
++    return 0;
++}
++
++void LogTitleAnimation() {
++    static uint32_t s_retraces = 0;
++    static uint32_t s_titleRetraces = 0;
++    ++s_retraces;
++    const uint32_t titleDraw = FindTaskByName("TTL DRAW PROC");
++    if (titleDraw == 0) {
++        return;
++    }
++    ++s_titleRetraces;
++    if (s_titleRetraces == 300 || s_titleRetraces == 1200) {
++        RT_LOG(RT_TAG_MOD) << "[start-up] taking a frame trace on the title screen" << std::endl;
++        GxFrameTrace::Request(3);
++    }
++    if (s_retraces % 60 != 0) {
++        return;
++    }
++    const uint32_t work = Memory::Read32(titleDraw + 0x38u);
++    float frameTime;
++    float frameTimeBase;
++    const uint32_t frameTimeBits = Memory::Read32(kFrameTime);
++    const uint32_t frameTimeBaseBits = Memory::Read32(kFrameTimeBase);
++    std::memcpy(&frameTime, &frameTimeBits, sizeof(frameTime));
++    std::memcpy(&frameTimeBase, &frameTimeBaseBits, sizeof(frameTimeBase));
++    auto& log = RT_LOG(RT_TAG_MOD);
++    log << "[start-up] title: frame time " << frameTime << " base " << frameTimeBase << " bus clock "
++        << Memory::Read32(kBusClock) << " draw work 0x" << std::hex << work << ":";
++    for (int i = 0; i < kTitleWords; ++i) {
++        log << " " << ((work >= 0x80000000u && work < 0x81800000u) ? Memory::Read32(work + i * 4u) : 0u);
++    }
++    log << std::dec << std::endl;
++}
++} // namespace
++} // namespace TraumaCenterWaits
++
 +extern "C" void TraumaCenterSoundThreadLoop(CpuContext* ctx) {
 +    using namespace TraumaCenterWaits;
 +    for (;;) {
@@ -299,6 +359,7 @@ index 0000000..326a011
 +        LogSaveTasks(ctx);
 +        LogScenes();
 +        LogTasks();
++        LogTitleAnimation();
 +        if (const uint32_t record = DoneRecord(kDoneSlot)) {
 +            MarkFinished(record);
 +        }
