@@ -1,0 +1,138 @@
+diff --git a/runtime/src/hle/gx/gx_tev.cpp b/runtime/src/hle/gx/gx_tev.cpp
+--- a/runtime/src/hle/gx/gx_tev.cpp
++++ b/runtime/src/hle/gx/gx_tev.cpp
+@@ -79,6 +79,7 @@
+ // ============================================================================
+ 
+ extern "C" void GX__SetTevColorOp_80171d60(uint32_t s, uint32_t op, uint32_t b, uint32_t sc, uint32_t cl, uint32_t or_) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("TevColorOp stage %u op %u bias %u scale %u clamp %u out %u", s, op, b, sc, cl, or_);
+     GX_DEFER_CALL(GX__SetTevColorOp_80171d60, s, op, b, sc, cl, or_);
+     if (!TevStageOk(s) || !TevRegOk(or_)) return;
+     GXSetTevColorOp((GXTevStageID)s, (GXTevOp)op, (GXTevBias)b, (GXTevScale)sc, (GXBool)cl, (GXTevRegID)or_);
+@@ -86,6 +87,7 @@
+ PPC_NATIVE_OVERRIDE_VOID(80171d60, GX__SetTevColorOp_80171d60, (uint32_t s, uint32_t op, uint32_t b, uint32_t sc, uint32_t cl, uint32_t or_), (s, op, b, sc, cl, or_));
+ 
+ extern "C" void GX__SetTevAlphaOp_80171db8(uint32_t s, uint32_t op, uint32_t b, uint32_t sc, uint32_t cl, uint32_t or_) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("TevAlphaOp stage %u op %u bias %u scale %u clamp %u out %u", s, op, b, sc, cl, or_);
+     GX_DEFER_CALL(GX__SetTevAlphaOp_80171db8, s, op, b, sc, cl, or_);
+     if (!TevStageOk(s) || !TevRegOk(or_)) return;
+     GXSetTevAlphaOp((GXTevStageID)s, (GXTevOp)op, (GXTevBias)b, (GXTevScale)sc, (GXBool)cl, (GXTevRegID)or_);
+@@ -121,10 +123,12 @@
+ PPC_NATIVE_OVERRIDE_VOID(80171ed4, GX__SetTevKColor_80171ed4, (uint32_t id, uint32_t cp), (id, cp));
+ 
+ extern "C" void GX__SetTevKColorSel_80171f30(uint32_t s, uint32_t sel) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("TevKColorSel stage %u sel %u", s, sel);
+     GX_DEFER_CALL(GX__SetTevKColorSel_80171f30, s, sel); if (!TevStageOk(s)) return; GXSetTevKColorSel((GXTevStageID)s, (GXTevKColorSel)sel); }
+ PPC_NATIVE_OVERRIDE_VOID(80171f30, GX__SetTevKColorSel_80171f30, (uint32_t s, uint32_t sel), (s, sel));
+ 
+ extern "C" void GX__SetTevKAlphaSel_80171f80(uint32_t s, uint32_t sel) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("TevKAlphaSel stage %u sel %u", s, sel);
+     GX_DEFER_CALL(GX__SetTevKAlphaSel_80171f80, s, sel); if (!TevStageOk(s)) return; GXSetTevKAlphaSel((GXTevStageID)s, (GXTevKAlphaSel)sel); }
+ PPC_NATIVE_OVERRIDE_VOID(80171f80, GX__SetTevKAlphaSel_80171f80, (uint32_t s, uint32_t sel), (s, sel));
+ 
+@@ -133,6 +137,7 @@
+ // ============================================================================
+ 
+ extern "C" void GX__SetTevSwapModeTable_8017200c(uint32_t id, uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("TevSwapModeTable %u = %u %u %u %u", id, r, g, b, a);
+     GX_DEFER_CALL(GX__SetTevSwapModeTable_8017200c, id, r, g, b, a);
+     if (!TevSwapOk(id)) return;
+     GXSetTevSwapModeTable((GXTevSwapSel)id, (GXTevColorChan)r, (GXTevColorChan)g, (GXTevColorChan)b, (GXTevColorChan)a);
+@@ -140,6 +145,7 @@
+ PPC_NATIVE_OVERRIDE_VOID(8017200c, GX__SetTevSwapModeTable_8017200c, (uint32_t id, uint32_t r, uint32_t g, uint32_t b, uint32_t a), (id, r, g, b, a));
+ 
+ extern "C" void GX__SetTevSwapMode_80171fd0(uint32_t s, uint32_t rs, uint32_t ts) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("TevSwapMode stage %u ras %u tex %u", s, rs, ts);
+     GX_DEFER_CALL(GX__SetTevSwapMode_80171fd0, s, rs, ts);
+     if (!TevStageOk(s) || !TevSwapOk(rs) || !TevSwapOk(ts)) return;
+     GXSetTevSwapMode((GXTevStageID)s, (GXTevSwapSel)rs, (GXTevSwapSel)ts);
+diff --git a/runtime/src/hle/gx/gx_pixel.cpp b/runtime/src/hle/gx/gx_pixel.cpp
+--- a/runtime/src/hle/gx/gx_pixel.cpp
++++ b/runtime/src/hle/gx/gx_pixel.cpp
+@@ -15,12 +15,14 @@
+ PPC_NATIVE_OVERRIDE_VOID(8017277c, GX__SetBlendMode_8017277c, (uint32_t t, uint32_t s, uint32_t d, uint32_t op), (t, s, d, op));
+ 
+ extern "C" void GX__SetColorUpdate_801727cc(uint32_t en) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("ColorUpdate %u", en);
+     GX_DEFER_CALL(GX__SetColorUpdate_801727cc, en);
+     GXSetColorUpdate(static_cast<GXBool>(en));
+ }
+ PPC_NATIVE_OVERRIDE_VOID(801727cc, GX__SetColorUpdate_801727cc, (uint32_t en), (en));
+ 
+ extern "C" void GX__SetAlphaUpdate_801727f8(uint32_t en) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("AlphaUpdate %u", en);
+     GX_DEFER_CALL(GX__SetAlphaUpdate_801727f8, en);
+     GXSetAlphaUpdate(static_cast<GXBool>(en));
+ }
+@@ -31,6 +33,7 @@
+ // ============================================================================
+ 
+ extern "C" void GX__SetZMode_80172824(uint32_t ce, uint32_t f, uint32_t ue) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("ZMode compare %u func %u update %u", ce, f, ue);
+     GX_DEFER_CALL(GX__SetZMode_80172824, ce, f, ue);
+     GXSetZMode(static_cast<GXBool>(ce), static_cast<GXCompare>(f), static_cast<GXBool>(ue));
+ }
+@@ -59,6 +62,7 @@
+ PPC_NATIVE_OVERRIDE_VOID(80172930, GX__SetDither_80172930, (uint32_t d), (d));
+ 
+ extern "C" void GX__SetDstAlpha_8017295c(uint32_t en, uint32_t a) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("DstAlpha enable %u value %u", en, a);
+     GX_DEFER_CALL(GX__SetDstAlpha_8017295c, en, a);
+     GXSetDstAlpha(static_cast<GXBool>(en), static_cast<u8>(a));
+ }
+@@ -75,6 +79,7 @@
+ PPC_NATIVE_OVERRIDE_VOID(801722cc, GX__SetFog_801722cc, (uint32_t t, float sz, float ez, float nz, float fz, uint32_t cp), (t, sz, ez, nz, fz, cp));
+ 
+ extern "C" void GX__SetAlphaCompare_80172088(uint32_t c0, uint32_t r0, uint32_t op, uint32_t c1, uint32_t r1) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("AlphaCompare %u %u op %u %u %u", c0, r0, op, c1, r1);
+     GX_DEFER_CALL(GX__SetAlphaCompare_80172088, c0, r0, op, c1, r1);
+     g_alphaCompareValid = true;
+     GXSetAlphaCompare((GXCompare)c0, (u8)r0, (GXAlphaOp)op, (GXCompare)c1, (u8)r1);
+diff --git a/runtime/src/hle/gx/gx_texture.cpp b/runtime/src/hle/gx/gx_texture.cpp
+--- a/runtime/src/hle/gx/gx_texture.cpp
++++ b/runtime/src/hle/gx/gx_texture.cpp
+@@ -761,6 +761,7 @@
+ // ============================================================================
+ 
+ extern "C" void GX__InitTlutObj_80170f80(uint32_t oa, uint32_t da, uint32_t f, uint32_t e) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("InitTlutObj 0x%08X <- 0x%08X format %u entries %u", oa, da, f, e);
+     GX_DEFER_CALL(GX__InitTlutObj_80170f80, oa, da, f, e);
+     std::lock_guard<std::mutex> guard(g_tlutObjMutex); GXTlutObj* obj = CreateHostTlutObj(oa); TlutObjMeta& meta = GetTlutObjMeta(oa);
+     meta.dataAddr=CanonicalizeGxMainRamAddress(da); meta.format=f; meta.entries=(u16)e; meta.dirty=false;
+@@ -775,6 +776,7 @@
+ static void LoadTlutImpl(uint32_t oa, uint32_t tl) { std::lock_guard<std::mutex> guard(g_tlutObjMutex); if (tl >= kMaxTluts) { RT_LOGF(RT_TAG_GX, "GXLoadTlut: invalid TLUT index %u (oa=0x%08X)\n", tl, oa); return; } auto metaIt = g_TlutObjMeta.find(oa); if (metaIt != g_TlutObjMeta.end() && metaIt->second.dirty) { if (ValidateTlutData(oa, metaIt->second)) { GXTlutObj* rebuild = CreateHostTlutObj(oa); GXInitTlutObj(rebuild, GuestToHostPtr(metaIt->second.dataAddr), (GXTlutFmt)metaIt->second.format, metaIt->second.entries); MarkHostTlutObjConstructed(oa); } metaIt->second.dirty = false; } GXTlutObj* obj = GetHostTlutObj(oa); GXLoadTlut(obj, (GXTlut)tl); }
+ 
+ extern "C" void GX__LoadTlut_80170fa8(uint32_t oa, uint32_t tl) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("LoadTlut 0x%08X -> tlut %u", oa, tl);
+     GxWorker::Run([oa, tl] { LoadTlutImpl(oa, tl); });
+     try { uint32_t gd = Memory::Read32(kGXDataPtrAddr); if (gd) Memory::Write16(gd + 2, 0); } catch (...) {}
+ }
+diff --git a/runtime/src/hle/gx/gx_lighting.cpp b/runtime/src/hle/gx/gx_lighting.cpp
+--- a/runtime/src/hle/gx/gx_lighting.cpp
++++ b/runtime/src/hle/gx/gx_lighting.cpp
+@@ -1,3 +1,4 @@
++#include "gx_frame_trace.h"
+ // gx_lighting.cpp - Lighting and Channel Control
+ #include "gx_internal.h"
+ #include "runtime_log.h"
+@@ -82,6 +83,7 @@
+ PPC_NATIVE_OVERRIDE_VOID(8017039c, GX__SetChanAmbColor_8017039c, (uint32_t c, uint32_t cp), (c, cp));
+ 
+ extern "C" void GX__SetChanMatColor_80170474(uint32_t c, uint32_t cp) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("ChanMatColor %u from 0x%08X", c, cp);
+     EnsureAuroraFrameActive();
+     GXColor color = DecodeGxColor(Memory::Read32(cp));
+     GxWorker::Run([c, color] { GXSetChanMatColor((GXChannelID)c, color); });
+@@ -89,10 +91,12 @@
+ PPC_NATIVE_OVERRIDE_VOID(80170474, GX__SetChanMatColor_80170474, (uint32_t c, uint32_t cp), (c, cp));
+ 
+ extern "C" void GX__SetNumChans_8017054c(uint32_t n) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("NumChans %u", n);
+     GX_DEFER_CALL(GX__SetNumChans_8017054c, n); GXSetNumChans((u8)n); }
+ PPC_NATIVE_OVERRIDE_VOID(8017054c, GX__SetNumChans_8017054c, (uint32_t n), (n));
+ 
+ extern "C" void GX__SetChanCtrl_80170570(uint32_t ch, uint32_t en, uint32_t as, uint32_t ms, uint32_t lm, uint32_t df, uint32_t af) {
++    if (GxFrameTrace::Active()) GxFrameTrace::Note("ChanCtrl %u enable %u amb %u mat %u lights 0x%X diff %u attn %u", ch, en, as, ms, lm, df, af);
+     GX_DEFER_CALL(GX__SetChanCtrl_80170570, ch, en, as, ms, lm, df, af);
+     GXSetChanCtrl((GXChannelID)ch, en!=0, (GXColorSrc)as, (GXColorSrc)ms, lm, (GXDiffuseFn)df, (GXAttnFn)af);
+ }
