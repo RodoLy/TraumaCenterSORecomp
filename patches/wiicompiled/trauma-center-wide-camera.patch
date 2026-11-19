@@ -1,0 +1,84 @@
+diff --git a/runtime/src/hle/gx/gx_transform.cpp b/runtime/src/hle/gx/gx_transform.cpp
+--- a/runtime/src/hle/gx/gx_transform.cpp
++++ b/runtime/src/hle/gx/gx_transform.cpp
+@@ -5,6 +5,7 @@
+ #include "gx_frame_trace.h"
+ #include "hle_stubs.h"
+ #include "aurora_events.h"
++#include "guest_abi/guest_region.h"
+ 
+ #include <cmath>
+ #include <unordered_map>
+@@ -162,7 +163,31 @@
+     }
+ }
+ 
++// Trauma Center: Second Opinion keeps the projection it builds and uses it to place things on the
++// 640x480 picture: the wound, the suture marks and the guide lines are drawn flat at the spots the
++// game works out from it. A wide matrix here moved those spots toward the middle a second time (the
++// flat drawing is already narrowed to the 4:3 picture), so the suture landed beside the arm. For that
++// game the camera is only widened on its way to the GPU (WidenOnTheGpu, below).
++static bool WidensOnlyOnTheGpu() {
++    return GuestRegion::ForeignGameAddress("RKDEEB", 1u) != 0;
++}
++
+ extern "C" void MTX__C_MTXPerspective_8019aa60(uint32_t ma, float fovY, float aspect, float n, float f) {
++    if (WidensOnlyOnTheGpu()) {
++        const float cot = 1.0f / std::tan(fovY * 0.5f * 3.14159265358979f / 180.0f);
++        const float depth = 1.0f / (f - n);
++        const float m[16] = {
++            cot / aspect, 0.0f, 0.0f, 0.0f,
++            0.0f, cot, 0.0f, 0.0f,
++            0.0f, 0.0f, -n * depth, depth * -(f * n),
++            0.0f, 0.0f, -1.0f, 0.0f,
++        };
++        auto* raw = static_cast<uint8_t*>(GuestToHostPtr(ma, sizeof(m)));
++        for (size_t i = 0; i < 16; ++i) {
++            BigEndian::WriteFloat32(raw + i * sizeof(float), m[i]);
++        }
++        return;
++    }
+     // Only the camera object that holds exactly this aspect: then ma is that object's matrix. Other
+     // callers (a cut-scene, a model drawn in a menu) are widened too but leave nothing behind.
+     auto* aspectField = static_cast<uint8_t*>(GuestToHostPtr(ma + kCameraAspectFromMatrix, 4));
+@@ -206,6 +231,18 @@
+ // perspective of their own (Animal Parade's has a scale above 11), which is not a world.
+ constexpr float kWorldProjectionMaxScale = 6.0f;
+ 
++// The GPU's copy of a 4:3 perspective camera, made as wide as the frame (see WidensOnlyOnTheGpu). The
++// height of the view stays the same and the sides show more, so whatever sat at a spot of the 4:3
++// picture still sits there in the middle of the wide one. The game keeps its own 4:3 matrix.
++static void WidenOnTheGpu(float m[16], GXProjectionType pt) {
++    if (pt != GX_PERSPECTIVE || !WidensOnlyOnTheGpu() || m[0] == 0.0f) {
++        return;
++    }
++    const float scale = WidePictureAspectScale(m[5] / m[0]);
++    m[0] /= scale;
++    m[2] /= scale;
++}
++
+ extern "C" void GX__SetProjection_8017301c(uint32_t ma, uint32_t pt) {
+     const uint32_t* raw=(const uint32_t*)GuestToHostPtr(ma, 64); float m[16];
+     SwapBeF32ArrayToHost(raw, m, 16);
+@@ -218,7 +255,9 @@
+     if (pt == GX_PERSPECTIVE && m[0] <= kWorldProjectionMaxScale) {
+         VI_HLE_NoteWorldDrawn();
+     }
+-    GxWorker::Run([mtx = std::to_array(m), pt]() mutable { GXSetProjection(mtx.data(), (GXProjectionType)pt); });
++    auto gpu = std::to_array(m);
++    WidenOnTheGpu(gpu.data(), (GXProjectionType)pt);
++    GxWorker::Run([mtx = gpu, pt]() mutable { GXSetProjection(mtx.data(), (GXProjectionType)pt); });
+     UpdateProjectionVectorFromMatrix(m, (GXProjectionType)pt);
+ }
+ PPC_NATIVE_OVERRIDE_VOID(8017301c, GX__SetProjection_8017301c, (uint32_t ma, uint32_t pt), (ma, pt));
+@@ -232,7 +271,9 @@
+     if (pt == GX_PERSPECTIVE && m[0] <= kWorldProjectionMaxScale) {
+         VI_HLE_NoteWorldDrawn();
+     }
+-    GxWorker::Run([mtx = std::to_array(m), pt]() mutable { GXSetProjection(mtx.data(), pt); });
++    auto gpu = std::to_array(m);
++    WidenOnTheGpu(gpu.data(), pt);
++    GxWorker::Run([mtx = gpu, pt]() mutable { GXSetProjection(mtx.data(), pt); });
+     UpdateProjectionVectorFromProjV(v);
+ }
+ PPC_NATIVE_OVERRIDE_VOID(80173080, GX__SetProjectionv_80173080, (uint32_t pa), (pa));
