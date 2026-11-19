@@ -9,7 +9,7 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
  
  namespace Bluetooth {
  namespace {
-@@ -64,6 +65,89 @@
+@@ -64,6 +65,104 @@
      return pad;
  }
  
@@ -94,12 +94,27 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
 +    return true;
 +}
 +
++// True once the left button has been held for kPinchAfterUs without a break.
++bool HeldLongEnoughToPinch(bool held) {
++    constexpr uint64_t kPinchAfterUs = 120000;
++    static uint64_t s_heldSinceUs = 0;
++    if (!held) {
++        s_heldSinceUs = 0;
++        return false;
++    }
++    const uint64_t now = NowUs();
++    if (s_heldSinceUs == 0) {
++        s_heldSinceUs = now;
++    }
++    return now - s_heldSinceUs >= kPinchAfterUs;
++}
++
 +} // namespace TraumaCenterMouse
 +
  EmulatedInput ReadControls() {
      if (InputBindings::InputBlocked()) {
          // The settings overlay owns the controls: the remote is at rest.
-@@ -82,8 +166,27 @@
+@@ -82,8 +181,33 @@
          input.pointerValid = true;
          input.pointerX = x / width * 2.0f - 1.0f;
          input.pointerY = y / height * 2.0f - 1.0f;
@@ -116,6 +131,12 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
 +            leftIsTool = TraumaCenterMouse::PushToolStick(left, onPicture, gameX, gameY, input);
 +        }
 +        if (left && !leftIsTool) input.buttons |= RemoteButton::kA;
++        if (TraumaCenterMouse::IsRunning() && TraumaCenterMouse::HeldLongEnoughToPinch(left && !leftIsTool)) {
++            // The forceps grab with A and B pressed together, a pinch. On the DS the stylus alone did
++            // it, so here a left click held a moment adds B by itself: a quick click (a menu, the
++            // next line of text) is A alone, a held one also pinches.
++            input.buttons |= RemoteButton::kB;
++        }
          if ((mouse & SDL_BUTTON_RMASK) != 0) input.buttons |= RemoteButton::kB;
 +        if (TraumaCenterMouse::IsRunning()) {
 +            // The rest of the Wii Remote and Nunchuk on the mouse, so a mouse alone plays the whole
