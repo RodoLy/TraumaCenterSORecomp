@@ -1,0 +1,121 @@
+diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hle/bluetooth/emulated_remote_host.cpp
+--- a/runtime/src/hle/bluetooth/emulated_remote_host.cpp
++++ b/runtime/src/hle/bluetooth/emulated_remote_host.cpp
+@@ -17,6 +17,7 @@
+ 
+ #include <algorithm>
+ #include <chrono>
++#include <cmath>
+ 
+ namespace Bluetooth {
+ namespace {
+@@ -64,6 +65,89 @@
+     return pad;
+ }
+ 
++// Trauma Center: Second Opinion with the mouse alone. The game picks a surgical tool with the
++// Nunchuk's stick: eight tools sit in a ring of hexagons around a center at the bottom left of the
++// screen, and pushing the stick toward one picks it. Here a left click on one of those hexagons
++// pushes the stick toward it instead of pressing A, for as long as the button is held (and at least
++// a few frames, so a quick click still counts). Everywhere else the left click is A, as always.
++//
++// The ring was measured on the 640x480 picture: center at (100, 387), tools about 50 units away.
++// A click closer than 20 units to the center, or farther than 80, is not on the ring.
++//
++// Elegir herramientas con el mouse: un clic sobre un hexágono del menú de herramientas empuja el
++// stick del Nunchuk hacia esa herramienta, en lugar de apretar A.
++namespace TraumaCenterMouse {
++
++constexpr float kGameWidth = 640.0f;
++constexpr float kGameHeight = 480.0f;
++constexpr float kRingCenterX = 100.0f;
++constexpr float kRingCenterY = 387.0f;
++constexpr float kRingInner = 20.0f;
++constexpr float kRingOuter = 80.0f;
++constexpr uint64_t kMinimumPushUs = 150000;
++
++bool IsRunning() {
++    return GuestRegion::ForeignGameAddress("RKDEEB", 1u) != 0;
++}
++
++// The game's 4:3 picture fills the window's height and is centered, with black bars at the sides.
++// Window coordinates to that picture's 640x480; false when the mouse is on a bar.
++bool ToGamePicture(float x, float y, int width, int height, float& gameX, float& gameY) {
++    const float pictureWidth = std::min(static_cast<float>(width), height * kGameWidth / kGameHeight);
++    const float pictureHeight = pictureWidth * kGameHeight / kGameWidth;
++    const float left = (width - pictureWidth) / 2.0f;
++    const float top = (height - pictureHeight) / 2.0f;
++    gameX = (x - left) / pictureWidth * kGameWidth;
++    gameY = (y - top) / pictureHeight * kGameHeight;
++    return gameX >= 0.0f && gameY >= 0.0f && gameX < kGameWidth && gameY < kGameHeight;
++}
++
++// The stick direction for a click on the ring, snapped to the nearest of eight; false off the ring.
++bool RingDirection(float gameX, float gameY, float& stickX, float& stickY) {
++    const float dx = gameX - kRingCenterX;
++    const float dy = kRingCenterY - gameY; // the stick's Y points up, the picture's down
++    const float distance = std::sqrt(dx * dx + dy * dy);
++    if (distance < kRingInner || distance > kRingOuter) {
++        return false;
++    }
++    constexpr float kEighth = 3.14159265f / 4.0f;
++    const float angle = std::round(std::atan2(dy, dx) / kEighth) * kEighth;
++    stickX = std::cos(angle);
++    stickY = std::sin(angle);
++    return true;
++}
++
++struct ToolClick {
++    bool active = false;       // the current left click started on the ring
++    bool wasPressed = false;   // the left button on the last sample
++    float stickX = 0.0f;
++    float stickY = 0.0f;
++    uint64_t startedUs = 0;
++};
++
++// Turns a left click on the ring into a stick push. Returns true while that push lasts, so the
++// caller leaves A unpressed.
++bool PushToolStick(bool pressed, bool onPicture, float gameX, float gameY, EmulatedInput& input) {
++    static ToolClick click;
++    const uint64_t now = NowUs();
++    if (pressed && !click.wasPressed) {
++        click.active = onPicture && RingDirection(gameX, gameY, click.stickX, click.stickY);
++        click.startedUs = now;
++    }
++    click.wasPressed = pressed;
++    if (click.active && !pressed && now - click.startedUs >= kMinimumPushUs) {
++        click.active = false;
++    }
++    if (!click.active) {
++        return false;
++    }
++    input.stickX = click.stickX;
++    input.stickY = click.stickY;
++    return true;
++}
++
++} // namespace TraumaCenterMouse
++
+ EmulatedInput ReadControls() {
+     if (InputBindings::InputBlocked()) {
+         // The settings overlay owns the controls: the remote is at rest.
+@@ -82,7 +166,18 @@
+         input.pointerValid = true;
+         input.pointerX = x / width * 2.0f - 1.0f;
+         input.pointerY = y / height * 2.0f - 1.0f;
+-        if ((mouse & SDL_BUTTON_LMASK) != 0) input.buttons |= RemoteButton::kA;
++        const bool left = (mouse & SDL_BUTTON_LMASK) != 0;
++        bool leftIsTool = false;
++        if (TraumaCenterMouse::IsRunning()) {
++            // The pointer follows the 4:3 picture, not the whole window with its side bars.
++            float gameX = 0.0f;
++            float gameY = 0.0f;
++            const bool onPicture = TraumaCenterMouse::ToGamePicture(x, y, width, height, gameX, gameY);
++            input.pointerX = gameX / TraumaCenterMouse::kGameWidth * 2.0f - 1.0f;
++            input.pointerY = gameY / TraumaCenterMouse::kGameHeight * 2.0f - 1.0f;
++            leftIsTool = TraumaCenterMouse::PushToolStick(left, onPicture, gameX, gameY, input);
++        }
++        if (left && !leftIsTool) input.buttons |= RemoteButton::kA;
+         if ((mouse & SDL_BUTTON_RMASK) != 0) input.buttons |= RemoteButton::kB;
+     }
+     return input;
