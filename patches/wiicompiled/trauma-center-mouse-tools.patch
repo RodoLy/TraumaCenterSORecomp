@@ -99,7 +99,7 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
  EmulatedInput ReadControls() {
      if (InputBindings::InputBlocked()) {
          // The settings overlay owns the controls: the remote is at rest.
-@@ -82,7 +166,18 @@
+@@ -82,8 +166,27 @@
          input.pointerValid = true;
          input.pointerX = x / width * 2.0f - 1.0f;
          input.pointerY = y / height * 2.0f - 1.0f;
@@ -117,5 +117,14 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
 +        }
 +        if (left && !leftIsTool) input.buttons |= RemoteButton::kA;
          if ((mouse & SDL_BUTTON_RMASK) != 0) input.buttons |= RemoteButton::kB;
++        if (TraumaCenterMouse::IsRunning()) {
++            // The rest of the Wii Remote and Nunchuk on the mouse, so a mouse alone plays the whole
++            // game: the middle button is Z, the two side buttons are C (forward) and + (back, which
++            // pauses).
++            if ((mouse & SDL_BUTTON_MMASK) != 0) input.z = true;
++            if ((mouse & SDL_BUTTON_X2MASK) != 0) input.c = true;
++            if ((mouse & SDL_BUTTON_X1MASK) != 0) input.buttons |= RemoteButton::kPlus;
++        }
      }
      return input;
+ }
