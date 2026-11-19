@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..5cdc0ff
+index 0000000..e0e1efc
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,411 @@
+@@ -0,0 +1,442 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -27,6 +27,7 @@ index 0000000..5cdc0ff
 +#include "runtime_log.h"
 +
 +#include <cstdint>
++#include <cstdio>
 +#include <cstring>
 +#include <initializer_list>
 +#include <string>
@@ -255,12 +256,42 @@ index 0000000..5cdc0ff
 +} // namespace
 +} // namespace TraumaCenterWaits
 +
++namespace TraumaCenterWaits {
++namespace {
++// The game's own tasks sit in three lists (-0x7290, -0x7278 and -0x7284 off r13). Each task keeps its
++// name at +0, its next task at +0x3C and its two functions at +0x30 and +0x34. The scenes stay empty
++// on the title screen, so log the running tasks whenever the set changes, to see which are missing.
++constexpr uint32_t kTaskLists[3] = {0x803A7430u, 0x803A7448u, 0x803A743Cu};
++
++void LogTasks() {
++    static std::string s_last;
++    std::string now;
++    for (int list = 0; list < 3; ++list) {
++        now += list == 0 ? "" : " |";
++        uint32_t task = Memory::Read32(kTaskLists[list]);
++        for (int count = 0; task >= 0x80000000u && task < 0x81800000u && count < 64; ++count) {
++            char line[96];
++            std::snprintf(line, sizeof(line), " %s(%08x,%08x)", GuestText(task).c_str(),
++                          Memory::Read32(task + 0x30u), Memory::Read32(task + 0x34u));
++            now += line;
++            task = Memory::Read32(task + 0x3Cu);
++        }
++    }
++    if (now != s_last) {
++        s_last = now;
++        RT_LOG(RT_TAG_MOD) << "[start-up] tasks:" << now << std::endl;
++    }
++}
++} // namespace
++} // namespace TraumaCenterWaits
++
 +extern "C" void TraumaCenterSoundThreadLoop(CpuContext* ctx) {
 +    using namespace TraumaCenterWaits;
 +    for (;;) {
 +        LogStartUpState();
 +        LogSaveTasks(ctx);
 +        LogScenes();
++        LogTasks();
 +        if (const uint32_t record = DoneRecord(kDoneSlot)) {
 +            MarkFinished(record);
 +        }
