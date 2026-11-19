@@ -18,7 +18,7 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
  
  namespace Bluetooth {
  namespace {
-@@ -64,6 +67,126 @@
+@@ -64,6 +67,156 @@
      return pad;
  }
  
@@ -103,6 +103,41 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
 +    return true;
 +}
 +
++float ReadGuestFloat(uint32_t address) {
++    const uint32_t bits = Memory::Read32(address);
++    float value;
++    std::memcpy(&value, &bits, sizeof(value));
++    return value;
++}
++
++// Where the remote must point so the game draws its pointer at (gameX, gameY) on the 640x480 picture.
++//
++// The game turns KPAD's position (-1..1) into picture coordinates in 0x8000E79C (X) and 0x8000E8A4 (Y):
++//     x = (640 + kpadX * scale) / 2 + offsetX
++//     y = (480 + kpadY * scale) / 2 + offsetY
++// with scale, offsetX and offsetY kept at 0x80282B58, +4 and +8 (640, 0 and 0 by default). So one
++// KPAD unit is the same distance across and down, and the picture's height is only +-0.75.
++// KPAD in turn sees this emulated remote's pointer about 1.30 times bigger across and 0.98 times
++// down (measured with the [pointer] log: 211 still samples, error under 0.003), so the result is
++// divided by those two numbers.
++//
++// Dónde debe apuntar el control para que el juego dibuje su puntero justo debajo del mouse.
++void AimAtPicture(float gameX, float gameY, EmulatedInput& input) {
++    constexpr uint32_t kPointerScreen = 0x80282B58u;
++    constexpr float kKpadPerGivenX = 1.3035f;
++    constexpr float kKpadPerGivenY = 0.9764f;
++    float scale = ReadGuestFloat(kPointerScreen);
++    if (!(scale > 1.0f)) {
++        scale = kGameWidth;
++    }
++    const float offsetX = ReadGuestFloat(kPointerScreen + 4u);
++    const float offsetY = ReadGuestFloat(kPointerScreen + 8u);
++    const float kpadX = ((gameX - offsetX) * 2.0f - kGameWidth) / scale;
++    const float kpadY = ((gameY - offsetY) * 2.0f - kGameHeight) / scale;
++    input.pointerX = kpadX / kKpadPerGivenX;
++    input.pointerY = kpadY / kKpadPerGivenY;
++}
++
 +// To line the game's pointer up with the mouse: twice a second, the pointer this remote is given and
 +// where the game's KPAD put it. KPADRead fills ten 0x88-byte samples per remote from 0x80281578,
 +// newest first, with the pointer's position (-1..1) at +0x20 and +0x24.
@@ -115,14 +150,9 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
 +        return;
 +    }
 +    s_lastUs = now;
-+    auto readFloat = [](uint32_t address) {
-+        const uint32_t bits = Memory::Read32(address);
-+        float value;
-+        std::memcpy(&value, &bits, sizeof(value));
-+        return value;
-+    };
 +    RT_LOG(RT_TAG_MOD) << "[pointer] given " << input.pointerX << " " << input.pointerY << " game "
-+                       << readFloat(kKpadStatus + 0x20u) << " " << readFloat(kKpadStatus + 0x24u) << std::endl;
++                       << ReadGuestFloat(kKpadStatus + 0x20u) << " " << ReadGuestFloat(kKpadStatus + 0x24u)
++                       << std::endl;
 +}
 +
 +// True once the left button has been held for kPinchAfterUs without a break.
@@ -145,7 +175,7 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
  EmulatedInput ReadControls() {
      if (InputBindings::InputBlocked()) {
          // The settings overlay owns the controls: the remote is at rest.
-@@ -82,8 +205,34 @@
+@@ -82,8 +235,33 @@
          input.pointerValid = true;
          input.pointerX = x / width * 2.0f - 1.0f;
          input.pointerY = y / height * 2.0f - 1.0f;
@@ -153,12 +183,11 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
 +        const bool left = (mouse & SDL_BUTTON_LMASK) != 0;
 +        bool leftIsTool = false;
 +        if (TraumaCenterMouse::IsRunning()) {
-+            // The pointer follows the 4:3 picture, not the whole window with its side bars.
++            // The game's pointer sits right under the mouse, on the 4:3 picture between the side bars.
 +            float gameX = 0.0f;
 +            float gameY = 0.0f;
 +            const bool onPicture = TraumaCenterMouse::ToGamePicture(x, y, width, height, gameX, gameY);
-+            input.pointerX = gameX / TraumaCenterMouse::kGameWidth * 2.0f - 1.0f;
-+            input.pointerY = gameY / TraumaCenterMouse::kGameHeight * 2.0f - 1.0f;
++            TraumaCenterMouse::AimAtPicture(gameX, gameY, input);
 +            leftIsTool = TraumaCenterMouse::PushToolStick(left, onPicture, gameX, gameY, input);
 +            TraumaCenterMouse::LogPointerCalibration(input);
 +        }
