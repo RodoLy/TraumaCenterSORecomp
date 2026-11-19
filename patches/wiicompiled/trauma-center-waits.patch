@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..26f827c
+index 0000000..d5c047f
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,366 @@
+@@ -0,0 +1,403 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -211,11 +211,48 @@ index 0000000..26f827c
 +} // namespace
 +} // namespace TraumaCenterWaits
 +
++namespace TraumaCenterWaits {
++namespace {
++// The game draws its 3D scenes from a table at 0x80282E98: eight bytes per scene, flags then the
++// NW4R g3d ScnRoot. ScnRoot::DrawOpa draws what the gather object at +0xB8 collected. No model has
++// been drawn yet, so log each scene's flags, its root and the gather object's first words when they
++// change, to see whether the gathered lists are empty.
++constexpr uint32_t kSceneTable = 0x80282E98u;
++constexpr int kScenesLogged = 4;
++constexpr int kGatherWords = 8;
++
++void LogScenes() {
++    static uint32_t s_last[kScenesLogged][2 + kGatherWords] = {};
++    for (int scene = 0; scene < kScenesLogged; ++scene) {
++        uint32_t now[2 + kGatherWords] = {};
++        now[0] = Memory::Read32(kSceneTable + scene * 8u);
++        now[1] = Memory::Read32(kSceneTable + scene * 8u + 4u);
++        const uint32_t gather = now[1] != 0 ? ReadIfGuest(now[1] + 0xB8u) : 0;
++        for (int i = 0; i < kGatherWords; ++i) {
++            now[2 + i] = (gather != 0 && gather != 0xFFFFFFFFu) ? ReadIfGuest(gather + i * 4u) : 0;
++        }
++        if (std::memcmp(now, s_last[scene], sizeof(now)) == 0) {
++            continue;
++        }
++        std::memcpy(s_last[scene], now, sizeof(now));
++        auto& log = RT_LOG(RT_TAG_MOD);
++        log << "[start-up] scene " << scene << " flags 0x" << std::hex << now[0] << " root 0x" << now[1]
++            << " gather";
++        for (int i = 0; i < kGatherWords; ++i) {
++            log << " " << now[2 + i];
++        }
++        log << std::dec << std::endl;
++    }
++}
++} // namespace
++} // namespace TraumaCenterWaits
++
 +extern "C" void TraumaCenterSoundThreadLoop(CpuContext* ctx) {
 +    using namespace TraumaCenterWaits;
 +    for (;;) {
 +        LogStartUpState();
 +        LogSaveTasks(ctx);
++        LogScenes();
 +        if (const uint32_t record = DoneRecord(kDoneSlot)) {
 +            MarkFinished(record);
 +        }
