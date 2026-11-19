@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..d5c047f
+index 0000000..5cdc0ff
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,403 @@
+@@ -0,0 +1,411 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -220,16 +220,20 @@ index 0000000..d5c047f
 +constexpr uint32_t kSceneTable = 0x80282E98u;
 +constexpr int kScenesLogged = 4;
 +constexpr int kGatherWords = 8;
++constexpr int kRootWords = 10; // the root's words from +0x98: its ScnGroup child list sits before +0xB8
 +
 +void LogScenes() {
-+    static uint32_t s_last[kScenesLogged][2 + kGatherWords] = {};
++    static uint32_t s_last[kScenesLogged][2 + kGatherWords + kRootWords] = {};
 +    for (int scene = 0; scene < kScenesLogged; ++scene) {
-+        uint32_t now[2 + kGatherWords] = {};
++        uint32_t now[2 + kGatherWords + kRootWords] = {};
 +        now[0] = Memory::Read32(kSceneTable + scene * 8u);
 +        now[1] = Memory::Read32(kSceneTable + scene * 8u + 4u);
 +        const uint32_t gather = now[1] != 0 ? ReadIfGuest(now[1] + 0xB8u) : 0;
 +        for (int i = 0; i < kGatherWords; ++i) {
 +            now[2 + i] = (gather != 0 && gather != 0xFFFFFFFFu) ? ReadIfGuest(gather + i * 4u) : 0;
++        }
++        for (int i = 0; i < kRootWords; ++i) {
++            now[2 + kGatherWords + i] = now[1] != 0 ? ReadIfGuest(now[1] + 0x98u + i * 4u) : 0;
 +        }
 +        if (std::memcmp(now, s_last[scene], sizeof(now)) == 0) {
 +            continue;
@@ -240,6 +244,10 @@ index 0000000..d5c047f
 +            << " gather";
 +        for (int i = 0; i < kGatherWords; ++i) {
 +            log << " " << now[2 + i];
++        }
++        log << " root+0x98";
++        for (int i = 0; i < kRootWords; ++i) {
++            log << " " << now[2 + kGatherWords + i];
 +        }
 +        log << std::dec << std::endl;
 +    }
