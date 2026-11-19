@@ -46,12 +46,14 @@ diff --git a/runtime/src/hle/gx/gx_copy.cpp b/runtime/src/hle/gx/gx_copy.cpp
  // gx_copy.cpp - Framebuffer Copy Operations
  #include "gx_internal.h"
  
-@@ -130,7 +131,21 @@
+@@ -130,7 +131,25 @@
  // Copy Execution
  // ============================================================================
  
 +extern std::atomic<uint32_t> g_gxCallDisplayListCount;
 +extern std::atomic<uint32_t> g_gxBeginCount;
++extern std::atomic<uint32_t> g_gxLoadPosMtxImmCount;
++extern std::atomic<uint32_t> g_lcQueueWaitCount;
 +
 +// Once every 60 frames: how many GXBegin draws and display lists the game sent. A screen that stays
 +// black while these are high is drawn but lost on the way; while they are zero the game is not drawing.
@@ -60,7 +62,9 @@ diff --git a/runtime/src/hle/gx/gx_copy.cpp b/runtime/src/hle/gx/gx_copy.cpp
 +    if (++s_frames < 60) return;
 +    s_frames = 0;
 +    RT_LOG(RT_TAG_GX) << "[draws] last 60 frames: " << g_gxBeginCount.exchange(0) << " GXBegin, "
-+                      << g_gxCallDisplayListCount.exchange(0) << " display lists" << std::endl;
++                      << g_gxCallDisplayListCount.exchange(0) << " display lists, "
++                      << g_gxLoadPosMtxImmCount.exchange(0) << " GXLoadPosMtxImm, "
++                      << g_lcQueueWaitCount.exchange(0) << " LCQueueWait" << std::endl;
 +}
 +
  extern "C" void GX__CopyDisp_8016fc38(uint32_t da, uint32_t c) {
@@ -68,3 +72,44 @@ diff --git a/runtime/src/hle/gx/gx_copy.cpp b/runtime/src/hle/gx/gx_copy.cpp
      GxFrameTrace::Note("CopyDisp to 0x%08X clear=%u", da, c);
      GxFrameTrace::EndFrame();
      EnsureAuroraFrameActive();
+diff --git a/runtime/src/hle/gx/gx_transform.cpp b/runtime/src/hle/gx/gx_transform.cpp
+--- a/runtime/src/hle/gx/gx_transform.cpp
++++ b/runtime/src/hle/gx/gx_transform.cpp
+@@ -1,3 +1,4 @@
++#include <atomic>
+ // gx_transform.cpp - Viewport, Projection, and Matrix Functions
+ #include "isa/big_endian.h"
+ #include "gx_internal.h"
+@@ -248,7 +249,11 @@
+ // Matrix Loading
+ // ============================================================================
+ 
++// Counted for the once-a-second draw summary in gx_copy.cpp.
++std::atomic<uint32_t> g_gxLoadPosMtxImmCount{0};
++
+ extern "C" void GX__LoadPosMtxImm_8017310c(uint32_t ma, uint32_t id) {
++    g_gxLoadPosMtxImmCount.fetch_add(1, std::memory_order_relaxed);
+     const uint32_t* raw=(const uint32_t*)GuestToHostPtr(ma); float m[12];
+     SwapBeF32ArrayToHost(raw, m, 12);
+     GxWorker::Run([mtx = std::to_array(m), id]() mutable { GXLoadPosMtxImm((float(*)[4])mtx.data(), id); });
+diff --git a/runtime/src/hle/os/os_cache.cpp b/runtime/src/hle/os/os_cache.cpp
+--- a/runtime/src/hle/os/os_cache.cpp
++++ b/runtime/src/hle/os/os_cache.cpp
+@@ -1,3 +1,4 @@
++#include <atomic>
+ // Data/instruction/locked cache maintenance HLE.
+ 
+ #include <cstdint>
+@@ -215,8 +216,12 @@
+     return 0;
+ }
+ 
++// Counted for the once-a-second draw summary in gx_copy.cpp (NW4R g3d waits here before each model).
++std::atomic<uint32_t> g_lcQueueWaitCount{0};
++
+ extern "C" void LCQueueWait_HLE_801a1988(CpuContext*)
+ {
++    g_lcQueueWaitCount.fetch_add(1, std::memory_order_relaxed);
+     // Synchronous HLE copy completes immediately.
+ }
+ 
