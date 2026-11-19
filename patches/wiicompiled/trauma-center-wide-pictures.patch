@@ -1,0 +1,13 @@
+diff --git a/runtime/src/dynamic_aspect.cpp b/runtime/src/dynamic_aspect.cpp
+--- a/runtime/src/dynamic_aspect.cpp
++++ b/runtime/src/dynamic_aspect.cpp
+@@ -180,6 +180,9 @@
+         AuroraSetViewportPolicy(AURORA_VIEWPORT_STRETCH);
+         VIUnlockAspectRatio();
+         AuroraSetWidePicture(4.0f / 3.0f);
++        // Trauma Center: Second Opinion draws its story scenes and portraits as pictures that cover
++        // the whole frame; stretched, the characters came out a third wider. They keep their shape.
++        AuroraSetWidePictureStretchesBackgrounds(GuestRegion::ForeignGameAddress("RKDEEB", 1u) == 0);
+     } else {
+         AuroraSetViewportPolicy(AURORA_VIEWPORT_FIT);
+         VILockAspectRatio(4, 3);
