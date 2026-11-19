@@ -1,15 +1,24 @@
 diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hle/bluetooth/emulated_remote_host.cpp
 --- a/runtime/src/hle/bluetooth/emulated_remote_host.cpp
 +++ b/runtime/src/hle/bluetooth/emulated_remote_host.cpp
-@@ -17,6 +17,7 @@
+@@ -9,6 +9,7 @@
+ #include "guest_abi/guest_region.h"
+ #include "input_bindings.h"
+ #include "runtime_log.h"
++#include "memory.h"
+ #include "wiimote_host.h"
+ 
+ #include <SDL3/SDL_mouse.h>
+@@ -17,6 +18,8 @@
  
  #include <algorithm>
  #include <chrono>
 +#include <cmath>
++#include <cstring>
  
  namespace Bluetooth {
  namespace {
-@@ -64,6 +65,104 @@
+@@ -64,6 +67,126 @@
      return pad;
  }
  
@@ -94,6 +103,28 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
 +    return true;
 +}
 +
++// To line the game's pointer up with the mouse: twice a second, the pointer this remote is given and
++// where the game's KPAD put it. KPADRead fills ten 0x88-byte samples per remote from 0x80281578,
++// newest first, with the pointer's position (-1..1) at +0x20 and +0x24.
++void LogPointerCalibration(const EmulatedInput& input) {
++    constexpr uint32_t kKpadStatus = 0x80281578u;
++    constexpr uint64_t kEveryUs = 500000;
++    static uint64_t s_lastUs = 0;
++    const uint64_t now = NowUs();
++    if (!input.pointerValid || now - s_lastUs < kEveryUs) {
++        return;
++    }
++    s_lastUs = now;
++    auto readFloat = [](uint32_t address) {
++        const uint32_t bits = Memory::Read32(address);
++        float value;
++        std::memcpy(&value, &bits, sizeof(value));
++        return value;
++    };
++    RT_LOG(RT_TAG_MOD) << "[pointer] given " << input.pointerX << " " << input.pointerY << " game "
++                       << readFloat(kKpadStatus + 0x20u) << " " << readFloat(kKpadStatus + 0x24u) << std::endl;
++}
++
 +// True once the left button has been held for kPinchAfterUs without a break.
 +bool HeldLongEnoughToPinch(bool held) {
 +    constexpr uint64_t kPinchAfterUs = 120000;
@@ -114,7 +145,7 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
  EmulatedInput ReadControls() {
      if (InputBindings::InputBlocked()) {
          // The settings overlay owns the controls: the remote is at rest.
-@@ -82,8 +181,33 @@
+@@ -82,8 +205,34 @@
          input.pointerValid = true;
          input.pointerX = x / width * 2.0f - 1.0f;
          input.pointerY = y / height * 2.0f - 1.0f;
@@ -129,6 +160,7 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
 +            input.pointerX = gameX / TraumaCenterMouse::kGameWidth * 2.0f - 1.0f;
 +            input.pointerY = gameY / TraumaCenterMouse::kGameHeight * 2.0f - 1.0f;
 +            leftIsTool = TraumaCenterMouse::PushToolStick(left, onPicture, gameX, gameY, input);
++            TraumaCenterMouse::LogPointerCalibration(input);
 +        }
 +        if (left && !leftIsTool) input.buttons |= RemoteButton::kA;
 +        if (TraumaCenterMouse::IsRunning() && TraumaCenterMouse::HeldLongEnoughToPinch(left && !leftIsTool)) {
