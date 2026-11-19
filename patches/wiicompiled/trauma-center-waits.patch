@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..e0e1efc
+index 0000000..326a011
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,442 @@
+@@ -0,0 +1,449 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -270,9 +270,16 @@ index 0000000..e0e1efc
 +        now += list == 0 ? "" : " |";
 +        uint32_t task = Memory::Read32(kTaskLists[list]);
 +        for (int count = 0; task >= 0x80000000u && task < 0x81800000u && count < 64; ++count) {
-+            char line[96];
-+            std::snprintf(line, sizeof(line), " %s(%08x,%08x)", GuestText(task).c_str(),
-+                          Memory::Read32(task + 0x30u), Memory::Read32(task + 0x34u));
++            // Also the first four words of its work area (+0x38), where a task keeps its own step.
++            const uint32_t work = Memory::Read32(task + 0x38u);
++            uint32_t step[4] = {};
++            for (uint32_t i = 0; i < 4; ++i) {
++                step[i] = (work >= 0x80000000u && work < 0x81800000u) ? Memory::Read32(work + i * 4u) : 0;
++            }
++            char line[160];
++            std::snprintf(line, sizeof(line), " %s(%08x,%08x work %08x:%x,%x,%x,%x)", GuestText(task).c_str(),
++                          Memory::Read32(task + 0x30u), Memory::Read32(task + 0x34u), work, step[0], step[1],
++                          step[2], step[3]);
 +            now += line;
 +            task = Memory::Read32(task + 0x3Cu);
 +        }
