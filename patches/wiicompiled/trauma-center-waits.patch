@@ -1,9 +1,9 @@
 diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
 new file mode 100644
-index 0000000..fea8d58
+index 0000000..2bef870
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
-@@ -0,0 +1,545 @@
+@@ -0,0 +1,556 @@
 +// Trauma Center: Second Opinion (RKDEEB): two places where the game waits by spinning, made to wait
 +// for the next retrace instead.
 +//
@@ -549,3 +549,14 @@ index 0000000..fea8d58
 +    Memory::Write32(kPauseCounter, 5);
 +}
 +FOREIGN_GAME_WRAPPER(RKDEEB, 8000A5D4, TraumaCenterResumeGame);
++
++// PPCMfhid2 reads the CPU's HID2 register. THPVideoDecode, the movie decoder, checks its locked-cache
++// bit (0x10000000) and refuses to decode a frame without it: the opening movie then shows only its
++// "Skip" prompt. LCEnable sets that bit on a Wii; here the runtime emulates the locked cache but its
++// LCEnable leaves HID2 alone, and this game's PPCMfhid2 is its own code. So report the bit as set.
++// El decodificador de video revisa que la caché bloqueada esté activa; aquí se informa que sí lo está.
++extern "C" void TraumaCenterPPCMfhid2(CpuContext* ctx) {
++    constexpr uint32_t kLockedCacheEnabled = 0x10000000u;
++    ctx->gpr[3] = ctx->hid2 | kLockedCacheEnabled;
++}
++FOREIGN_GAME_WRAPPER(RKDEEB, 80134C9C, TraumaCenterPPCMfhid2);
