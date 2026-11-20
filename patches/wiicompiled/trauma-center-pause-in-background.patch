@@ -1,0 +1,150 @@
+diff --git a/runtime/include/runtime_config.h b/runtime/include/runtime_config.h
+--- a/runtime/include/runtime_config.h
++++ b/runtime/include/runtime_config.h
+@@ -55,6 +55,8 @@
+     // How a game played with the emulated Wii Remote is controlled: "mouse", "mouse_keys" or
+     // "mouse_controller" (see ControlModes below).
+     std::optional<std::string> controlMode;
++    // Whether a game played with the emulated Wii Remote stops while its window is in the background.
++    std::optional<bool> pauseWhenUnfocused;
+     std::optional<bool> fastLoading;
+     std::optional<bool> fastForwardKey;
+     std::optional<int32_t> fastForwardScancode;
+@@ -346,7 +348,9 @@
+               "# How a game played with the emulated Wii Remote is controlled: mouse\n"
+               "# (the mouse alone), mouse_keys (mouse and keyboard) or\n"
+               "# mouse_controller (mouse and a controller).\n"
+-              "mode = \"mouse\"\n\n"
++              "mode = \"mouse\"\n"
++              "# Stop the game while its window is in the background.\n"
++              "pause_when_unfocused = true\n\n"
+               "[audio]\n"
+               "volume = 1.0\n"
+               "music_volume = 1.0\n"
+@@ -528,6 +532,7 @@
+             std::cerr << "[runtime] Unknown controls.mode=\"" << *value << "\", using mouse" << std::endl;
+         }
+     }
++    config.pauseWhenUnfocused = FindConfigValue<bool>(document, "controls", "pause_when_unfocused");
+     config.fastLoading = FindConfigValue<bool>(document, "speed", "fast_loading");
+     // "hold_tab_to_fast_forward" is the name older versions wrote, before the key could be changed.
+     config.fastForwardKey = FindConfigValue<bool>(document, "speed", "hold_to_fast_forward");
+@@ -1116,6 +1121,15 @@
+     return WriteSetting("controls", "mode", FormatString(value));
+ }
+ 
++inline bool PauseWhenUnfocused(bool fallback = true) {
++    return Get().pauseWhenUnfocused.value_or(fallback);
++}
++
++inline bool SetPauseWhenUnfocused(bool value) {
++    Mutable().pauseWhenUnfocused = value;
++    return WriteSetting("controls", "pause_when_unfocused", value ? "true" : "false");
++}
++
+ inline std::string Language(std::string fallback = "english") {
+     return Get().language.value_or(std::move(fallback));
+ }
+diff --git a/runtime/src/settings_overlay.cpp b/runtime/src/settings_overlay.cpp
+--- a/runtime/src/settings_overlay.cpp
++++ b/runtime/src/settings_overlay.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "hle/gx/gx_frame_trace.h"
+ #include "bluetooth/emulated_remote_host.h"
++#include "foreign_game_options.h"
+ #include "guest_abi/guest_region.h"
+ #include "gx_worker.h"
+ #include "audio_backend.h"
+@@ -1132,6 +1133,11 @@
+     ImGui::TextDisabled("%s", kChoices[static_cast<size_t>(current)].help);
+     ImGui::TextDisabled("The game's instructions follow the choice after a restart.");
+     ImGui::PopTextWrapPos();
++    bool pause = ForeignGameOptions::g_pauseWhenUnfocused.load(std::memory_order_relaxed);
++    if (ImGui::Checkbox("Pause when the window is in the background", &pause)) {
++        ForeignGameOptions::g_pauseWhenUnfocused.store(pause, std::memory_order_relaxed);
++        RuntimeConfigFile::SetPauseWhenUnfocused(pause);
++    }
+     ImGui::Separator();
+ }
+ 
+diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
+--- a/runtime/src/hle/game_mods/trauma_center_waits.cpp
++++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
+@@ -20,6 +20,9 @@
+ #include "memory.h"
+ #include "runtime_log.h"
+ #include "hle/gx/gx_frame_trace.h"
++#include "foreign_game_options.h"
++
++#include <SDL3/SDL_keyboard.h>
+ 
+ #include <cstdint>
+ #include <cstdio>
+@@ -377,6 +380,37 @@
+     }
+     log << std::dec << std::endl;
+ }
++// Stops the game while its window is in the background, the way the game pauses itself while it
++// loads: bit 0x2 of the main loop's flags stops the game's own work, and setting the counter at
++// -0x7F80(r13) to 5 lets the main loop clear the bit again five frames later. A pause the game made
++// itself is left to the game. Called once a frame from the sound thread's loop below.
++//
++// Pausa el juego mientras su ventana está en segundo plano (F10, Controller settings).
++void PauseWhileInBackground() {
++    constexpr uint32_t kPauseCounter = 0x803A6740u; // -0x7F80(r13)
++    static bool s_pausedHere = false;
++    const bool background = SDL_GetKeyboardFocus() == nullptr;
++    const bool wanted = background && ForeignGameOptions::g_pauseWhenUnfocused.load(std::memory_order_relaxed);
++    const uint32_t flags = Memory::Read32(kMainLoopFlags);
++    if (wanted && !s_pausedHere) {
++        if ((flags & 2u) != 0) {
++            return; // the game is already paused by itself; it will resume by itself
++        }
++        Memory::Write32(kPauseCounter, 0xFFFFFFFFu);
++        Memory::Write32(kMainLoopFlags, (flags & ~1u) | 2u);
++        s_pausedHere = true;
++        RT_LOG(RT_TAG_MOD) << "Window in the background: game paused" << std::endl;
++    } else if (wanted && s_pausedHere) {
++        // Keep it paused even if something counted the pause down meanwhile.
++        Memory::Write32(kPauseCounter, 0xFFFFFFFFu);
++        Memory::Write32(kMainLoopFlags, (flags & ~1u) | 2u);
++    } else if (!wanted && s_pausedHere) {
++        Memory::Write32(kPauseCounter, 5);
++        s_pausedHere = false;
++        RT_LOG(RT_TAG_MOD) << "Window back in front: game resumed" << std::endl;
++    }
++}
++
+ } // namespace
+ } // namespace TraumaCenterWaits
+ 
+@@ -389,6 +423,7 @@
+         LogTasks();
+         LogTitleAnimation();
+         LogMoviePlayer();
++        PauseWhileInBackground();
+         if (const uint32_t record = DoneRecord(kDoneSlot)) {
+             MarkFinished(record);
+         }
+diff --git a/runtime/include/foreign_game_options.h b/runtime/include/foreign_game_options.h
+new file mode 100644
+--- /dev/null
++++ b/runtime/include/foreign_game_options.h
+@@ -0,0 +1,16 @@
++#pragma once
++
++// Choices for a game played with the emulated Wii Remote that the game's own code reads while it
++// runs (F10, Controller settings). Each starts from Config.toml and changes at once when the player
++// picks another; the settings overlay also saves it.
++
++#include "runtime_config.h"
++
++#include <atomic>
++
++namespace ForeignGameOptions {
++
++// Stop the game while its window is in the background (Config.toml [controls] pause_when_unfocused).
++inline std::atomic_bool g_pauseWhenUnfocused{RuntimeConfigFile::PauseWhenUnfocused(true)};
++
++} // namespace ForeignGameOptions
