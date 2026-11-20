@@ -1,0 +1,95 @@
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -487,20 +487,28 @@
+ // That suits what a game draws flat on the screen - a clock, a text box - but not a draw that covers
+ // the whole frame: a fade to black, or the scene drawn back from a copy, has to reach the sides too.
+ // This tells the two apart by where the vertices of an orthographic draw land across the frame.
+-// AuroraSetWidePictureStretchesBackgrounds: when off, a flat draw only counts when it covers the
+-// whole picture, top to bottom as well as side to side (a backdrop, a fade, a tint over the scene);
+-// one that only spans the width - a text box, a character drawn on a wide strip - keeps its 4:3 shape.
++// AuroraSetWidePictureStretchesBackgrounds: when off, pictures keep their shape. A frame with no 3D
++// model is shown between bars (picture_only_frame), so nothing in it counts. In a frame with models,
++// a band across the picture (the stripes at the top of a screen, a panel at the bottom) is stretched
++// sideways as usual, and a draw that covers the whole picture is enlarged evenly instead (see
++// shader_info.cpp).
+ static std::atomic_bool s_widePictureStretchesBackgrounds{true};
+ 
+ // The build assumes finite math, so the running minimum and maximum start from large numbers
+ // instead of infinity.
+ constexpr float kFarOutside = 1.0e30f;
+ 
+-static bool ortho_draw_fills_width(const u8* vertices, u16 vtxCount, u32 vtxStride, GXVtxFmt fmt) noexcept {
+-  const bool wholePictureOnly = !s_widePictureStretchesBackgrounds.load(std::memory_order_relaxed);
++// coversPicture is set when the draw also covers the picture from top to bottom.
++static bool ortho_draw_fills_width(const u8* vertices, u16 vtxCount, u32 vtxStride, GXVtxFmt fmt,
++                                   bool& coversPicture) noexcept {
++  coversPicture = false;
++  const bool keepShapes = !s_widePictureStretchesBackgrounds.load(std::memory_order_relaxed);
+   if (picture_only_frame()) {
+     return false;
+   }
++  // A game that keeps its pictures' shape draws its bands a little past the edges (a line that runs
++  // to 1.2); such a band still spans the picture.
++  const float farthest = keepShapes ? 2.f : 1.1f;
+   const auto& state = g_gxState;
+   const GXAttrType positionSource = state.vtxDesc[GX_VA_POS];
+   if (positionSource == GX_NONE || vtxCount == 0 || vtxStride == 0) {
+@@ -553,7 +561,7 @@
+     // A draw that covers the frame lies right on its edges. A position far outside them (or not a
+     // number at all) means this vertex was not read the way the game laid it out, and a wrong
+     // guess here would stretch a letter of text out to the side; so the draw keeps the safe answer.
+-    if (!(frameX >= -1.1f && frameX <= 1.1f)) {
++    if (!(frameX >= -farthest && frameX <= farthest)) {
+       static int s_reported = 0;
+       if (s_reported < 30) {
+         ++s_reported;
+@@ -568,8 +576,8 @@
+     rightmost = std::max(rightmost, frameX);
+   }
+   const bool fillsHeight = lowest <= -WidePictureFullWidth && highest >= WidePictureFullWidth;
+-  const bool fills = leftmost <= -WidePictureFullWidth && rightmost >= WidePictureFullWidth &&
+-                     (fillsHeight || !wholePictureOnly);
++  const bool fills = leftmost <= -WidePictureFullWidth && rightmost >= WidePictureFullWidth;
++  coversPicture = fills && fillsHeight;
+   if (fills) {
+     static int s_reported = 0;
+     if (s_reported < 30) {
+@@ -688,9 +696,11 @@
+     ++g_gxState.meshDrawsThisFrame;
+   }
+   if (g_gxState.projType == GX_ORTHOGRAPHIC && wide_picture_factor() > 1.f) {
+-    const bool fillsWidth = ortho_draw_fills_width(vertices, vtxCount, vtxStride, fmt);
+-    if (fillsWidth != g_gxState.orthoDrawFillsWidth) {
++    bool coversPicture = false;
++    const bool fillsWidth = ortho_draw_fills_width(vertices, vtxCount, vtxStride, fmt, coversPicture);
++    if (fillsWidth != g_gxState.orthoDrawFillsWidth || coversPicture != g_gxState.orthoDrawCoversPicture) {
+       g_gxState.orthoDrawFillsWidth = fillsWidth;
++      g_gxState.orthoDrawCoversPicture = coversPicture;
+       g_gxState.dirty |= DirtyUniform;
+     }
+   }
+diff --git a/lib/gx/gx.hpp b/lib/gx/gx.hpp
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -410,6 +410,8 @@
+   float wideGameAspect = 0.f;
+   // Whether the orthographic draw being submitted covers the whole width of the frame.
+   bool orthoDrawFillsWidth = false;
++  // Whether it also covers the picture from top to bottom.
++  bool orthoDrawCoversPicture = false;
+   // EFB copies into textures since the last copy to the display, and how many the frame before had.
+   // A game draws what it reads back as a texture (a shadow, a blurred copy of the scene) before its
+   // last texture copy of the frame, and the picture shown on screen - its text, its clock - after.
+diff --git a/lib/gx/shader_info.cpp b/lib/gx/shader_info.cpp
+--- a/lib/gx/shader_info.cpp
++++ b/lib/gx/shader_info.cpp
+@@ -452,7 +452,7 @@
+   // after the frame's first texture copy may be the scene itself drawn back from that copy, which is
+   // already as wide as the frame, so it is only stretched.
+   if (const float wide = wide_picture_factor(); wide > 1.f && g_gxState.projType == GX_ORTHOGRAPHIC &&
+-                                                g_gxState.orthoDrawFillsWidth && g_gxState.texCopiesThisFrame == 0 &&
++                                                g_gxState.orthoDrawCoversPicture && g_gxState.texCopiesThisFrame == 0 &&
+                                                 fifo::wide_picture_keeps_shapes()) {
+     proj.m1[1] *= wide;
+     proj.m1[3] *= wide;
