@@ -1,0 +1,25 @@
+diff --git a/runtime/src/hle/game_mods/animal_parade_cheats.cpp b/runtime/src/hle/game_mods/animal_parade_cheats.cpp
+--- a/runtime/src/hle/game_mods/animal_parade_cheats.cpp
++++ b/runtime/src/hle/game_mods/animal_parade_cheats.cpp
+@@ -28,6 +28,7 @@
+ 
+ #include "game_mods.h"
+ #include "guest_abi/cpu_context.h"
++#include "guest_abi/guest_region.h"
+ #include "guest_function_imports.h"
+ #include "hle_stubs.h"
+ #include "memory.h"
+@@ -122,9 +123,11 @@
+     ImGui::TextDisabled("Changes apply right away and are kept for the next time you play.");
+ }
+ 
+-bool Always() { return true; }
++// Only while Harvest Moon: Animal Parade is the game running, so another game's F10 menu has no
++// Cheats from it.
++bool AnimalParadeRunning() { return ::GuestRegion::ForeignGameAddress("RBIEE9", 1u) != 0; }
+ 
+-const bool kCheatsMenu = (GameMods::RegisterCheatsPanel({"Cheats", Always, DrawCheatsMenu}), true);
++const bool kCheatsMenu = (GameMods::RegisterCheatsPanel({"Cheats", AnimalParadeRunning, DrawCheatsMenu}), true);
+ 
+ } // namespace
+ } // namespace AnimalParadeCheats
