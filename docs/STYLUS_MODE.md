@@ -23,7 +23,7 @@ El port tendrá dos modos, elegibles en F10 y en `UserData\Config.toml`:
 | Modo (F10 → Controller settings → Controls, o `[controls] mode` en Config.toml) | Controles |
 |---|---|
 | **Solo mouse** (`mouse`) | Como el stylus de DS: clic en una herramienta para elegirla, clic sostenido para agarrar, clic derecho sostenido para el Healing Touch |
-| **Mouse y teclado** (`mouse_keys`) | El mouse apunta y hace clic; las teclas 1 a 8 eligen herramientas (en el sentido del reloj desde la de arriba), Espacio agarra, Shift izquierdo inicia el Healing Touch |
+| **Mouse y teclado** (`mouse_keys`) | El mouse apunta y hace clic; las teclas 1 a 8 eligen herramientas (en el sentido del reloj desde la de arriba), Espacio agarra, Shift izquierdo es B y Q es Z (las dos juntas: el Healing Touch) |
 | **Mouse y control** (`mouse_controller`) | El mouse apunta y hace clic; el stick del control elige herramientas y sus botones hacen lo demás, como el Nunchuk |
 
 En los tres, lo del mouse funciona siempre; el modo agrega las teclas y decide qué instrucciones
@@ -104,7 +104,7 @@ The port will have two modes, chosen in F10 and in `UserData\Config.toml`:
 | Mode (F10 → Controller settings → Controls, or `[controls] mode` in Config.toml) | Controls |
 |---|---|
 | **Mouse only** (`mouse`) | Like the DS stylus: click a tool to pick it, hold the click to grab, hold the right button for the Healing Touch |
-| **Mouse and keyboard** (`mouse_keys`) | The mouse points and clicks; keys 1 to 8 pick tools (clockwise from the top one), Space grabs, Left Shift starts the Healing Touch |
+| **Mouse and keyboard** (`mouse_keys`) | The mouse points and clicks; keys 1 to 8 pick tools (clockwise from the top one), Space grabs, Left Shift is B and Q is Z (both held: the Healing Touch) |
 | **Mouse and controller** (`mouse_controller`) | The mouse points and clicks; the controller's stick picks tools and its buttons do the rest, like the Nunchuk |
 
 In all three, the mouse always works; the mode adds the keys and decides which instructions the game

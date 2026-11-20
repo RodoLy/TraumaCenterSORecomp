@@ -191,26 +191,22 @@ diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hl
          if (TraumaCenterMouse::IsRunning()) {
              // The rest of the Wii Remote and Nunchuk on the mouse, so a mouse alone plays the whole
              // game: the middle button is Z, the two side buttons are C (forward) and + (back, which
-@@ -263,6 +321,18 @@
+@@ -263,6 +321,14 @@
              if ((mouse & SDL_BUTTON_X1MASK) != 0) input.buttons |= RemoteButton::kPlus;
          }
      }
 +    if (TraumaCenterMouse::IsRunning() && CurrentControlMode() == ControlMode::MouseKeys) {
 +        // On top of the keyboard's usual keys (F10, Controller settings: Space A, Left Shift B, Q Z
-+        // and so on), the number keys pick tools, Space held also grabs (A and B, a pinch) and Left
-+        // Shift held also starts the Healing Touch (B and Z).
++        // and so on, so Q and Left Shift together are the Healing Touch), the number keys pick tools
++        // and Space held also grabs (A and B, a pinch).
 +        const bool* keys = SDL_GetKeyboardState(nullptr);
 +        TraumaCenterMouse::PushToolStickFromKeys(keys, input);
 +        if (keys[SDL_SCANCODE_SPACE]) input.buttons |= RemoteButton::kA | RemoteButton::kB;
-+        if (keys[SDL_SCANCODE_LSHIFT]) {
-+            input.buttons |= RemoteButton::kB;
-+            input.z = true;
-+        }
 +    }
      return input;
  }
  
-@@ -375,6 +445,25 @@
+@@ -375,6 +441,25 @@
  
  } // namespace
  
@@ -247,7 +243,7 @@ diff --git a/runtime/src/settings_overlay.cpp b/runtime/src/settings_overlay.cpp
  #include "guest_abi/guest_region.h"
  #include "gx_worker.h"
  #include "audio_backend.h"
-@@ -1096,8 +1097,47 @@
+@@ -1096,8 +1097,49 @@
      ImGui::PopID();
  }
  
@@ -263,7 +259,8 @@ diff --git a/runtime/src/settings_overlay.cpp b/runtime/src/settings_overlay.cpp
 +        {"Mouse only", "Like the DS stylus: click a tool to pick it, hold the click to grab, hold the "
 +                       "right button to start the Healing Touch."},
 +        {"Mouse and keyboard", "The mouse points and clicks; keys 1 to 8 pick tools (clockwise from the "
-+                               "top), Space grabs, Left Shift starts the Healing Touch."},
++                               "top), Space grabs, Left Shift is B and Q is Z (both held: the Healing "
++                               "Touch)."},
 +        {"Mouse and controller", "The mouse points and clicks; the controller's stick picks tools and its "
 +                                 "buttons do the rest, like the Nunchuk."},
 +    }};
@@ -283,6 +280,7 @@ diff --git a/runtime/src/settings_overlay.cpp b/runtime/src/settings_overlay.cpp
 +    }
 +    PushMenuTextWrap();
 +    ImGui::TextDisabled("%s", kChoices[static_cast<size_t>(current)].help);
++    ImGui::TextDisabled("The game's instructions follow the choice after a restart.");
 +    ImGui::PopTextWrapPos();
 +    ImGui::Separator();
 +}
