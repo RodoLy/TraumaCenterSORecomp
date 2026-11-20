@@ -38,3 +38,32 @@ with "Pause when the window is in the background" or with `[controls] pause_when
 | Parche / Patch | Qué cambia / What it changes |
 |---|---|
 | `trauma-center-pause-in-background.patch` | `trauma_center_waits.cpp`: revisa el foco una vez por retrace y usa el contador de pausa del juego (0x803A6740) y su bandera 0x2 (0x803A73FC). / Checks the focus once per retrace and uses the game's pause counter (0x803A6740) and its flag 0x2 (0x803A73FC). |
+
+## Saltar el arranque / Skipping the start-up
+
+**Español.** La advertencia de salud, el recordatorio de la correa y el logo pasan de inmediato. El
+video de apertura se ve una vez y después se salta. Ambas cosas se apagan en F10 > Mods > Trauma
+Center ("Skip the start-up screens", "Skip the opening movie once seen").
+
+**English.** The health warning, the strap reminder and the logo go by at once. The opening movie
+plays once and is skipped from then on. Both can be turned off in F10 > Mods > Trauma Center ("Skip
+the start-up screens", "Skip the opening movie once seen").
+
+| Parche / Patch | Qué cambia / What it changes |
+|---|---|
+| `trauma-center-skip-intro.patch` | Nuevo `trauma_center_comfort.cpp`. La tarea del título ("TTL DRAW PROC", 0x801215AC) guarda su paso en +0 y un contador en +0x18; en los pasos 2, 4 y 6 el contador se pone en su último cuadro. El paso 8 (el video) para el video cuando 0x80019238 responde 1. / New `trauma_center_comfort.cpp`. The title's task keeps its step at +0 and a counter at +0x18; in steps 2, 4 and 6 the counter is set to its last frame. Step 8 (the movie) stops the movie when 0x80019238 answers 1. |
+
+```toml
+[mods]
+trauma_center_skip_start_screens = true
+trauma_center_skip_seen_opening = true
+trauma_center_opening_seen = true    # lo escribe el juego / written by the game
+```
+
+## Reintentar / Retrying
+
+**Español.** El juego ya tiene "RETRY" en su menú de pausa (botón + o Enter), junto con "Episode
+Select" y "PRACTICE", así que no hizo falta agregar nada.
+
+**English.** The game already has "RETRY" in its pause menu (the + button or Enter), next to
+"Episode Select" and "PRACTICE", so nothing had to be added.

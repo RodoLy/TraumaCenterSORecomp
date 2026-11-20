@@ -1,0 +1,223 @@
+diff --git a/runtime/include/runtime_config.h b/runtime/include/runtime_config.h
+--- a/runtime/include/runtime_config.h
++++ b/runtime/include/runtime_config.h
+@@ -1160,6 +1160,13 @@
+     return found != mods.end() && found->second;
+ }
+ 
++// A game mod's switch in [mods] for a change that starts on: `fallback` when its line is missing.
++inline bool ModSetting(std::string_view name, bool fallback) {
++    const auto& mods = Get().mods;
++    const auto found = mods.find(name);
++    return found != mods.end() ? found->second : fallback;
++}
++
+ // A game mod's setting when its line in [mods] is a number, or `fallback` when it is true, false or
+ // missing.
+ inline double ModNumber(std::string_view name, double fallback) {
+diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
+--- a/runtime/src/hle/game_mods/trauma_center_waits.cpp
++++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
+@@ -20,6 +20,7 @@
+ #include "memory.h"
+ #include "runtime_log.h"
+ #include "foreign_game_options.h"
++#include "trauma_center_comfort.h"
+ 
+ #include <SDL3/SDL_keyboard.h>
+ 
+@@ -162,6 +163,7 @@
+     using namespace TraumaCenterWaits;
+     for (;;) {
+         PauseWhileInBackground();
++        TraumaCenterComfort::OnRetrace();
+         if (const uint32_t record = DoneRecord(kDoneSlot)) {
+             MarkFinished(record);
+         }
+diff --git a/runtime/src/hle/game_mods/trauma_center_comfort.h b/runtime/src/hle/game_mods/trauma_center_comfort.h
+new file mode 100644
+--- /dev/null
++++ b/runtime/src/hle/game_mods/trauma_center_comfort.h
+@@ -0,0 +1,14 @@
++#pragma once
++
++// Trauma Center: Second Opinion (RKDEEB): comfort changes that leave the game itself alone, each
++// with a switch in F10 > Mods > Trauma Center and in Config.toml [mods]. See trauma_center_comfort.cpp.
++//
++// Comodidades para Trauma Center que no cambian el juego; cada una se apaga en F10 > Mods.
++
++namespace TraumaCenterComfort {
++
++// Called once a frame from the sound thread's loop (trauma_center_waits.cpp), between the game's
++// frames.
++void OnRetrace();
++
++} // namespace TraumaCenterComfort
+diff --git a/runtime/src/hle/game_mods/trauma_center_comfort.cpp b/runtime/src/hle/game_mods/trauma_center_comfort.cpp
+new file mode 100644
+--- /dev/null
++++ b/runtime/src/hle/game_mods/trauma_center_comfort.cpp
+@@ -0,0 +1,163 @@
++// Trauma Center: Second Opinion (RKDEEB): comfort changes, each with a switch in F10 > Mods >
++// Trauma Center and a line in Config.toml [mods]:
++//   trauma_center_skip_start_screens = true   the warning, the strap reminder and the logo go by at once
++//   trauma_center_skip_seen_opening = true    the opening movie is skipped once it has been seen
++//   trauma_center_opening_seen = true         written by the game the first time the opening ends
++//
++// How the game starts up. "TTL DRAW PROC" (0x801215AC) is the title's task; its work area (the
++// task's +0x38) keeps its step at +0 and a frame counter at +0x18:
++//   step 2   the health and safety warning, in the console's language: 15 seconds (counter 900),
++//            any button jumps to its last half second
++//   step 4   the Wii Remote strap reminder, the same way
++//   step 6   the logo: three seconds (counter 0xB4), no button
++//   step 8   the opening movie (/movie/op.thp); A stops it. Each frame the step asks the movie for
++//            the frame it shows (0x80018FFC) and for its frame count (0x80019238), and stops the
++//            movie once the first reaches the second less one.
++//   step 12  the title menu
++// Each counter goes up by one a frame and the step moves on when it equals its end, so setting it to
++// the end less one finishes the screen on the next frame, the same way waiting would.
++//
++// Así arranca el juego: advertencia, recordatorio de la correa, logo y video de apertura. Aquí se
++// adelanta el contador de cada pantalla hasta su último cuadro, y el video se da por terminado si ya
++// se vio una vez.
++
++#include "trauma_center_comfort.h"
++
++#include "game_mods.h"
++#include "guest_abi/cpu_context.h"
++#include "guest_abi/guest_region.h"
++#include "hle_stubs.h"
++#include "memory.h"
++#include "runtime_config.h"
++#include "runtime_log.h"
++
++#include <imgui.h>
++
++#include <atomic>
++#include <cstdint>
++
++namespace TraumaCenterComfort {
++namespace {
++
++constexpr const char* kSkipStartScreensKey = "trauma_center_skip_start_screens";
++constexpr const char* kSkipSeenOpeningKey = "trauma_center_skip_seen_opening";
++constexpr const char* kOpeningSeenKey = "trauma_center_opening_seen";
++
++std::atomic_bool g_skipStartScreens{RuntimeConfigFile::ModSetting(kSkipStartScreensKey, true)};
++std::atomic_bool g_skipSeenOpening{RuntimeConfigFile::ModSetting(kSkipSeenOpeningKey, true)};
++std::atomic_bool g_openingSeen{RuntimeConfigFile::ModSetting(kOpeningSeenKey, false)};
++
++// The game's tasks sit in three lists; each task has its next one at +0x3C, its function at +0x30
++// and its work area at +0x38 (cadProcess.cpp, 0x8000D6E4).
++constexpr uint32_t kTaskLists[3] = {0x803A7430u, 0x803A7448u, 0x803A743Cu};
++constexpr uint32_t kTaskNext = 0x3Cu;
++constexpr uint32_t kTaskFunction = 0x30u;
++constexpr uint32_t kTaskWork = 0x38u;
++constexpr int kMostTasksInAList = 64;
++
++constexpr uint32_t kTitleTask = 0x801215ACu; // "TTL DRAW PROC"
++constexpr uint32_t kTitleStep = 0x00u;       // in its work area
++constexpr uint32_t kTitleCounter = 0x18u;
++
++constexpr uint32_t kWarningScreen = 2;
++constexpr uint32_t kStrapScreen = 4;
++constexpr uint32_t kLogoScreen = 6;
++constexpr uint32_t kOpeningMovie = 8;
++constexpr uint32_t kScreenEnd = 15 * 60; // the warning and the strap reminder
++constexpr uint32_t kLogoEnd = 0xB4;
++
++bool IsGuestAddress(uint32_t address) {
++    return address >= 0x80000000u && address < 0x81800000u;
++}
++
++// The work area of the running task whose function is `function`, or 0.
++uint32_t FindTaskWork(uint32_t function) {
++    for (uint32_t list : kTaskLists) {
++        uint32_t task = Memory::Read32(list);
++        for (int count = 0; IsGuestAddress(task) && count < kMostTasksInAList; ++count) {
++            if (Memory::Read32(task + kTaskFunction) == function) {
++                const uint32_t work = Memory::Read32(task + kTaskWork);
++                return IsGuestAddress(work) ? work : 0;
++            }
++            task = Memory::Read32(task + kTaskNext);
++        }
++    }
++    return 0;
++}
++
++void Save(const char* key, std::atomic_bool& value, bool on) {
++    value.store(on, std::memory_order_relaxed);
++    RuntimeConfigFile::WriteSetting("mods", key, on ? "true" : "false");
++}
++
++// The F10 menu's part: two checkboxes, applied at once and saved for the next start.
++void DrawSettings() {
++    bool skipScreens = g_skipStartScreens.load(std::memory_order_relaxed);
++    if (ImGui::Checkbox("Skip the start-up screens", &skipScreens)) {
++        Save(kSkipStartScreensKey, g_skipStartScreens, skipScreens);
++    }
++    ImGui::Indent();
++    ImGui::TextDisabled("The health warning, the strap reminder and the logo go by at once.");
++    ImGui::Unindent();
++    bool skipOpening = g_skipSeenOpening.load(std::memory_order_relaxed);
++    if (ImGui::Checkbox("Skip the opening movie once seen", &skipOpening)) {
++        Save(kSkipSeenOpeningKey, g_skipSeenOpening, skipOpening);
++    }
++    ImGui::Indent();
++    ImGui::TextDisabled(g_openingSeen.load(std::memory_order_relaxed)
++                            ? "Already seen: the title comes up right after the logo."
++                            : "Not seen yet: it plays once more, then it is skipped.");
++    ImGui::Unindent();
++}
++
++bool TraumaCenterRunning() { return ::GuestRegion::ForeignGameAddress("RKDEEB", 1u) != 0; }
++
++const bool kSettingsPanel =
++    (GameMods::RegisterSettingsPanel({"Trauma Center", TraumaCenterRunning, DrawSettings}), true);
++
++} // namespace
++
++void OnRetrace() {
++    static uint32_t s_lastStep = 0;
++    const uint32_t work = FindTaskWork(kTitleTask);
++    if (work == 0) {
++        s_lastStep = 0;
++        return;
++    }
++    const uint32_t step = Memory::Read32(work + kTitleStep);
++    // The opening has been seen once its step ends, by itself or with A.
++    if (s_lastStep == kOpeningMovie && step != kOpeningMovie && !g_openingSeen.load(std::memory_order_relaxed)) {
++        Save(kOpeningSeenKey, g_openingSeen, true);
++        RT_LOG(RT_TAG_MOD) << "Opening movie seen: it is skipped from now on" << std::endl;
++    }
++    s_lastStep = step;
++    if (!g_skipStartScreens.load(std::memory_order_relaxed)) {
++        return;
++    }
++    if (step == kWarningScreen || step == kStrapScreen) {
++        Memory::Write32(work + kTitleCounter, kScreenEnd - 1);
++    } else if (step == kLogoScreen) {
++        Memory::Write32(work + kTitleCounter, kLogoEnd - 1);
++    }
++}
++
++} // namespace TraumaCenterComfort
++
++// 0x80019238: the open movie's frame count (0 when none is open). The title's opening step asks for
++// it right after the frame it shows (the call returns to 0x80121AB4); answering 1 there makes that
++// step stop the movie at once, the way its A button does, once the opening has been seen.
++// Cuántos cuadros tiene el video abierto; en la apertura se responde 1 para que se termine de una vez.
++extern "C" void TraumaCenterMovieFrameCount(CpuContext* ctx) {
++    using namespace TraumaCenterComfort;
++    constexpr uint32_t kMoviePlayer = 0x80287320u;
++    constexpr uint32_t kMovieOpen = 0xA0u;
++    constexpr uint32_t kMovieFrames = 0x50u;
++    constexpr uint32_t kTitleOpeningAsks = 0x80121AB4u;
++    uint32_t frames = Memory::Read32(kMoviePlayer + kMovieOpen) != 0 ? Memory::Read32(kMoviePlayer + kMovieFrames) : 0;
++    if (ctx->lr == kTitleOpeningAsks && frames != 0 && g_skipSeenOpening.load(std::memory_order_relaxed) &&
++        g_openingSeen.load(std::memory_order_relaxed)) {
++        frames = 1;
++    }
++    ctx->gpr[3] = frames;
++}
++FOREIGN_GAME_WRAPPER(RKDEEB, 80019238, TraumaCenterMovieFrameCount);
