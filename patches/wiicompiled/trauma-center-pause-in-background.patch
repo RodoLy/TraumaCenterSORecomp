@@ -17,7 +17,7 @@ diff --git a/runtime/include/runtime_config.h b/runtime/include/runtime_config.h
 -              "mode = \"mouse\"\n\n"
 +              "mode = \"mouse\"\n"
 +              "# Stop the game while its window is in the background.\n"
-+              "pause_when_unfocused = true\n\n"
++              "pause_when_unfocused = false\n\n"
                "[audio]\n"
                "volume = 1.0\n"
                "music_volume = 1.0\n"
@@ -33,7 +33,7 @@ diff --git a/runtime/include/runtime_config.h b/runtime/include/runtime_config.h
      return WriteSetting("controls", "mode", FormatString(value));
  }
  
-+inline bool PauseWhenUnfocused(bool fallback = true) {
++inline bool PauseWhenUnfocused(bool fallback = false) {
 +    return Get().pauseWhenUnfocused.value_or(fallback);
 +}
 +
@@ -145,6 +145,6 @@ new file mode 100644
 +namespace ForeignGameOptions {
 +
 +// Stop the game while its window is in the background (Config.toml [controls] pause_when_unfocused).
-+inline std::atomic_bool g_pauseWhenUnfocused{RuntimeConfigFile::PauseWhenUnfocused(true)};
++inline std::atomic_bool g_pauseWhenUnfocused{RuntimeConfigFile::PauseWhenUnfocused(false)};
 +
 +} // namespace ForeignGameOptions

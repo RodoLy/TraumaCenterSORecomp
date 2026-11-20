@@ -26,13 +26,15 @@ hold_to_fast_forward = true   # para encenderlo / to turn it on
 
 ## Pausa con la ventana en segundo plano / Pause in the background
 
-**Español.** Si la ventana pierde el foco (Alt+Tab, otra ventana encima), el juego se pausa igual
-que con su propia pausa, y sigue unos cuadros después de volver. Se apaga en F10 con "Pause when the
-window is in the background" o con `[controls] pause_when_unfocused = false`.
+**Español.** Si se enciende, cuando la ventana pierde el foco (Alt+Tab, otra ventana encima) el
+juego se pausa igual que con su propia pausa, y sigue unos cuadros después de volver. Viene apagado,
+como el original; se enciende en F10 > Controls con "Pause when the window is in the background" o
+con `[controls] pause_when_unfocused = true`.
 
-**English.** When the window loses focus (Alt+Tab, another window on top), the game pauses the same
-way its own pause does, and carries on a few frames after the window comes back. Turn it off in F10
-with "Pause when the window is in the background" or with `[controls] pause_when_unfocused = false`.
+**English.** When on, the game pauses the same way its own pause does whenever the window loses
+focus (Alt+Tab, another window on top), and carries on a few frames after the window comes back. It
+starts off, like the original; turn it on in F10 > Controls with "Pause when the window is in the
+background" or with `[controls] pause_when_unfocused = true`.
 
 | Parche / Patch | Qué cambia / What it changes |
 |---|---|
