@@ -57,12 +57,12 @@ diff --git a/runtime/src/hle/game_mods/trauma_center_comfort.cpp b/runtime/src/h
 new file mode 100644
 --- /dev/null
 +++ b/runtime/src/hle/game_mods/trauma_center_comfort.cpp
-@@ -0,0 +1,163 @@
+@@ -0,0 +1,164 @@
 +// Trauma Center: Second Opinion (RKDEEB): comfort changes, each with a switch in F10 > Mods >
-+// Trauma Center and a line in Config.toml [mods]:
++// Trauma Center and a line in Config.toml [mods]. All start off, so the game starts like the original:
 +//   trauma_center_skip_start_screens = true   the warning, the strap reminder and the logo go by at once
 +//   trauma_center_skip_seen_opening = true    the opening movie is skipped once it has been seen
-+//   trauma_center_opening_seen = true         written by the game the first time the opening ends
++//   trauma_center_opening_seen = true         written the first time the opening ends, switch or not
 +//
 +// How the game starts up. "TTL DRAW PROC" (0x801215AC) is the title's task; its work area (the
 +// task's +0x38) keeps its step at +0 and a frame counter at +0x18:
@@ -103,8 +103,8 @@ new file mode 100644
 +constexpr const char* kSkipSeenOpeningKey = "trauma_center_skip_seen_opening";
 +constexpr const char* kOpeningSeenKey = "trauma_center_opening_seen";
 +
-+std::atomic_bool g_skipStartScreens{RuntimeConfigFile::ModSetting(kSkipStartScreensKey, true)};
-+std::atomic_bool g_skipSeenOpening{RuntimeConfigFile::ModSetting(kSkipSeenOpeningKey, true)};
++std::atomic_bool g_skipStartScreens{RuntimeConfigFile::ModSetting(kSkipStartScreensKey, false)};
++std::atomic_bool g_skipSeenOpening{RuntimeConfigFile::ModSetting(kSkipSeenOpeningKey, false)};
 +std::atomic_bool g_openingSeen{RuntimeConfigFile::ModSetting(kOpeningSeenKey, false)};
 +
 +// The game's tasks sit in three lists; each task has its next one at +0x3C, its function at +0x30
@@ -150,7 +150,8 @@ new file mode 100644
 +    RuntimeConfigFile::WriteSetting("mods", key, on ? "true" : "false");
 +}
 +
-+// The F10 menu's part: two checkboxes, applied at once and saved for the next start.
++// The F10 menu's part: two checkboxes, both off at first, applied at once and saved for the next
++// start.
 +void DrawSettings() {
 +    bool skipScreens = g_skipStartScreens.load(std::memory_order_relaxed);
 +    if (ImGui::Checkbox("Skip the start-up screens", &skipScreens)) {

@@ -40,13 +40,13 @@ with "Pause when the window is in the background" or with `[controls] pause_when
 
 ## Saltar el arranque / Skipping the start-up
 
-**Español.** La advertencia de salud, el recordatorio de la correa y el logo pasan de inmediato. El
-video de apertura se ve una vez y después se salta. Ambas cosas se apagan en F10 > Mods > Trauma
-Center ("Skip the start-up screens", "Skip the opening movie once seen").
+**Español.** Dos casillas en F10 > Mods > Trauma Center, apagadas al principio: "Skip the start-up
+screens" hace que la advertencia de salud, el recordatorio de la correa y el logo pasen de inmediato;
+"Skip the opening movie once seen" salta el video de apertura después de la primera vez que se vio.
 
-**English.** The health warning, the strap reminder and the logo go by at once. The opening movie
-plays once and is skipped from then on. Both can be turned off in F10 > Mods > Trauma Center ("Skip
-the start-up screens", "Skip the opening movie once seen").
+**English.** Two checkboxes in F10 > Mods > Trauma Center, off at first: "Skip the start-up screens"
+makes the health warning, the strap reminder and the logo go by at once; "Skip the opening movie
+once seen" skips the opening movie after the first time it was seen.
 
 | Parche / Patch | Qué cambia / What it changes |
 |---|---|
@@ -54,9 +54,9 @@ the start-up screens", "Skip the opening movie once seen").
 
 ```toml
 [mods]
-trauma_center_skip_start_screens = true
-trauma_center_skip_seen_opening = true
-trauma_center_opening_seen = true    # lo escribe el juego / written by the game
+trauma_center_skip_start_screens = true   # para encenderlo / to turn it on
+trauma_center_skip_seen_opening = true    # para encenderlo / to turn it on
+trauma_center_opening_seen = true         # lo escribe el juego / written by the game
 ```
 
 ## Reintentar / Retrying
