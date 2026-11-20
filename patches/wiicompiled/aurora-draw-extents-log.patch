@@ -1,0 +1,208 @@
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -566,18 +566,115 @@
+   return fills;
+ }
+ 
++// Where a vertex of the draw being submitted sits in view space (before the projection), or false
++// when it cannot be read the way the game laid it out.
++static bool read_view_position(const u8* vertex, GXVtxFmt fmt, float view[3]) noexcept {
++  const auto& state = g_gxState;
++  const GXAttrType positionSource = state.vtxDesc[GX_VA_POS];
++  if (positionSource == GX_NONE) {
++    return false;
++  }
++  u32 positionOffset = 0;
++  for (int i = GX_VA_PNMTXIDX; i < GX_VA_POS; ++i) {
++    positionOffset += state.vtxDesc[i] != GX_NONE ? 1 : 0;
++  }
++  const auto& positionFormat = state.vtxFmts[fmt].attrs[GX_VA_POS];
++  const u32 components = positionFormat.cnt == GX_POS_XY ? 2 : 3;
++  const u32 componentSize = comp_type_size(GX_VA_POS, positionFormat.type);
++  const u8* source = vertex + positionOffset;
++  bool littleEndian = false;
++  if (positionSource == GX_INDEX8 || positionSource == GX_INDEX16) {
++    const auto& array = state.arrays[GX_VA_POS];
++    const u32 index = positionSource == GX_INDEX8 ? source[0] : static_cast<u32>((source[0] << 8) | source[1]);
++    const size_t start = static_cast<size_t>(index) * array.stride;
++    if (array.data == nullptr || start + components * componentSize > array.size) {
++      return false;
++    }
++    source = static_cast<const u8*>(array.data) + start;
++    littleEndian = array.le;
++  }
++  float position[3] = {0.f, 0.f, 0.f};
++  for (u32 c = 0; c < components; ++c) {
++    position[c] = read_position_component(source + c * componentSize, positionFormat.type, positionFormat.frac,
++                                          littleEndian);
++  }
++  const bool matrixPerVertex = state.vtxDesc[GX_VA_PNMTXIDX] == GX_DIRECT;
++  const u32 matrix = std::min<u32>(matrixPerVertex ? (vertex[0] & 0x3fu) / 3u : state.currentPnMtx, MaxPnMtx - 1);
++  const auto& m = state.pnMtx[matrix].pos;
++  const Vec4<float>* rows[3] = {&m.m0, &m.m1, &m.m2};
++  for (int r = 0; r < 3; ++r) {
++    const auto& row = *rows[r];
++    view[r] = row[0] * position[0] + row[1] * position[1] + row[2] * position[2] + row[3];
++  }
++  return true;
++}
++
++// Diagnostics (AuroraLogDrawExtents): for a few frames, one line per draw telling where it lands. x and
++// y are in the game's 4:3 view, -1 to 1 from edge to edge, so a draw from -1 to 1 covers the picture
++// exactly; "list" marks draws that came from a display list; "copies" counts the texture copies made
++// so far in the frame.
++static std::atomic_int s_extentFramesLeft{0};
++static int s_extentLinesThisFrame = 0;
++
++static void log_draw_extent(const u8* vertices, u16 vtxCount, u32 vtxStride, GXVtxFmt fmt,
++                            bool fromDisplayList) noexcept {
++  constexpr int kLinesPerFrame = 400;
++  if (s_extentFramesLeft.load(std::memory_order_relaxed) <= 0 || s_extentLinesThisFrame >= kLinesPerFrame ||
++      vtxStride == 0) {
++    return;
++  }
++  ++s_extentLinesThisFrame;
++  const auto& proj = g_gxState.proj;
++  const bool perspective = g_gxState.projType == GX_PERSPECTIVE;
++  // The GPU's copy of a perspective camera may already be the wide one; bring it back to 4:3.
++  const float wide = perspective ? std::max(1.f, wide_picture_factor()) : 1.f;
++  const float aspect = perspective && proj.m0[0] != 0.f ? proj.m1[1] / proj.m0[0] : 0.f;
++  float left = std::numeric_limits<float>::infinity();
++  float right = -left;
++  float bottom = left;
++  float top = -left;
++  int behind = 0;
++  for (u16 i = 0; i < vtxCount; ++i) {
++    float view[3];
++    if (!read_view_position(vertices + static_cast<size_t>(i) * vtxStride, fmt, view)) {
++      Log.info("draw-extent: {} verts={}{} position unreadable", perspective ? "persp" : "ortho", vtxCount,
++               fromDisplayList ? " list" : "");
++      return;
++    }
++    float w = 1.f;
++    if (perspective) {
++      w = proj.m3[0] * view[0] + proj.m3[1] * view[1] + proj.m3[2] * view[2] + proj.m3[3];
++      if (!(w > 0.f)) {
++        ++behind;
++        continue;
++      }
++    }
++    const float x = (proj.m0[0] * view[0] + proj.m0[1] * view[1] + proj.m0[2] * view[2] + proj.m0[3]) / w * wide;
++    const float y = (proj.m1[0] * view[0] + proj.m1[1] * view[1] + proj.m1[2] * view[2] + proj.m1[3]) / w;
++    left = std::min(left, x);
++    right = std::max(right, x);
++    bottom = std::min(bottom, y);
++    top = std::max(top, y);
++  }
++  Log.info("draw-extent: {} verts={}{} x {:.3f} to {:.3f} y {:.3f} to {:.3f} behind={} aspect={:.3f} fills={} "
++           "copies={}",
++           perspective ? "persp" : "ortho", vtxCount, fromDisplayList ? " list" : "", left, right, bottom, top,
++           behind, aspect, g_gxState.orthoDrawFillsWidth ? 1 : 0, g_gxState.texCopiesThisFrame);
++}
++
+ // Every path that hands vertices to the renderer calls this before its draw is recorded, so the
+ // uniform block of a flat draw always matches the draw itself. A path that skipped it would leave
+ // the answer of the draw before: a text drawn right after a fade would then come out stretched.
+-static void classify_ortho_draw(const u8* vertices, u16 vtxCount, u32 vtxStride, GXVtxFmt fmt) noexcept {
+-  if (g_gxState.projType != GX_ORTHOGRAPHIC || wide_picture_factor() <= 1.f) {
+-    return;
+-  }
+-  const bool fillsWidth = ortho_draw_fills_width(vertices, vtxCount, vtxStride, fmt);
+-  if (fillsWidth != g_gxState.orthoDrawFillsWidth) {
+-    g_gxState.orthoDrawFillsWidth = fillsWidth;
+-    g_gxState.dirty |= DirtyUniform;
++static void classify_ortho_draw(const u8* vertices, u16 vtxCount, u32 vtxStride, GXVtxFmt fmt,
++                                bool fromDisplayList = false) noexcept {
++  if (g_gxState.projType == GX_ORTHOGRAPHIC && wide_picture_factor() > 1.f) {
++    const bool fillsWidth = ortho_draw_fills_width(vertices, vtxCount, vtxStride, fmt);
++    if (fillsWidth != g_gxState.orthoDrawFillsWidth) {
++      g_gxState.orthoDrawFillsWidth = fillsWidth;
++      g_gxState.dirty |= DirtyUniform;
++    }
+   }
++  log_draw_extent(vertices, vtxCount, vtxStride, fmt, fromDisplayList);
+ }
+ 
+ static u16 usable_vertex_count(GXPrimitive prim, u16 vtxCount) noexcept {
+@@ -1116,7 +1213,7 @@
+     const gfx::Range vertRange = gfx::push_verts(vertexData.data(), vertexData.size(), 4);
+     if (indexCount != 0) {
+       // Display lists arrive here already merged; their flat draws need the same check as any other.
+-      classify_ortho_draw(vertexData.data(), vtxCount, vtxSize, fmt);
++      classify_ortho_draw(vertexData.data(), vtxCount, vtxSize, fmt, true);
+       push_gx_draw(prim, fmt, vtxCount, vertRange, idxRange, indexCount);
+     }
+   } else if (subCmd == GX_AURORA_DEBUG_GROUP_PUSH) {
+@@ -1141,6 +1238,22 @@
+   sDrawCache.hasFogRange = false;
+ }
+ 
++void log_draw_extents(int frames) noexcept {
++  s_extentFramesLeft.store(frames, std::memory_order_relaxed);
++  s_extentLinesThisFrame = 0;
++  if (frames > 0) {
++    Log.info("draw-extent: logging the next {} frames (wide factor {:.3f})", frames, wide_picture_factor());
++  }
++}
++
++void draw_extents_frame_shown() noexcept {
++  if (s_extentFramesLeft.load(std::memory_order_relaxed) > 0) {
++    s_extentFramesLeft.fetch_sub(1, std::memory_order_relaxed);
++    s_extentLinesThisFrame = 0;
++    Log.info("draw-extent: frame shown");
++  }
++}
++
+ void set_wide_picture_stretches_backgrounds(bool stretch) noexcept {
+   s_widePictureStretchesBackgrounds.store(stretch, std::memory_order_relaxed);
+ }
+diff --git a/lib/gx/regs.cpp b/lib/gx/regs.cpp
+--- a/lib/gx/regs.cpp
++++ b/lib/gx/regs.cpp
+@@ -7,6 +7,9 @@
+ #include <cmath>
+ 
+ namespace aurora::gx::fifo {
++// Defined in command_processor.cpp (AuroraLogDrawExtents).
++void draw_extents_frame_shown() noexcept;
++
+ namespace {
+ constexpr Module Log{"aurora::gx::fifo"};
+ 
+@@ -288,6 +291,7 @@
+   const bool clear = reg_get(value, 1, 11) != 0;
+   if (reg_get(value, 1, 14) != 0) {
+     copy_disp(clear, value);
++    draw_extents_frame_shown();
+     g_gxState.texCopiesLastFrame = g_gxState.texCopiesThisFrame;
+     g_gxState.texCopiesThisFrame = 0;
+   } else {
+diff --git a/lib/dolphin/gx/GXAurora.cpp b/lib/dolphin/gx/GXAurora.cpp
+--- a/lib/dolphin/gx/GXAurora.cpp
++++ b/lib/dolphin/gx/GXAurora.cpp
+@@ -53,8 +53,11 @@
+ 
+ namespace aurora::gx::fifo {
+ void set_wide_picture_stretches_backgrounds(bool stretch) noexcept;
++void log_draw_extents(int frames) noexcept;
+ }
+ 
++void AuroraLogDrawExtents(int frames) { aurora::gx::fifo::log_draw_extents(frames); }
++
+ void AuroraSetWidePictureStretchesBackgrounds(bool stretch) {
+   aurora::gx::fifo::set_wide_picture_stretches_backgrounds(stretch);
+ }
+diff --git a/include/dolphin/gx/GXAurora.h b/include/dolphin/gx/GXAurora.h
+--- a/include/dolphin/gx/GXAurora.h
++++ b/include/dolphin/gx/GXAurora.h
+@@ -187,6 +187,9 @@
+  * portrait, a story scene) turns it off, so they keep their shape with bars beside them.
+  */
+ void AuroraSetWidePictureStretchesBackgrounds(bool stretch);
++// Diagnostics: logs, for the next `frames` frames, where each draw lands in the 4:3 view
++// ("draw-extent:" lines).
++void AuroraLogDrawExtents(int frames);
+ 
+ /**
+  * Retrieves the current content framebuffer size.

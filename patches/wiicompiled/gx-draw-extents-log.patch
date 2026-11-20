@@ -1,0 +1,23 @@
+diff --git a/runtime/src/hle/gx/gx_frame_trace.cpp b/runtime/src/hle/gx/gx_frame_trace.cpp
+--- a/runtime/src/hle/gx/gx_frame_trace.cpp
++++ b/runtime/src/hle/gx/gx_frame_trace.cpp
+@@ -1,7 +1,10 @@
+ #include "gx_frame_trace.h"
+ 
++#include "gx_internal.h"
+ #include "runtime_log.h"
+ 
++#include <dolphin/gx/GXAurora.h>
++
+ #include <atomic>
+ #include <cstdarg>
+ #include <chrono>
+@@ -39,6 +42,8 @@
+     g_line.store(0);
+     g_framesLeft.store(frames);
+     RT_LOGF(RT_TAG_GX, "[gx-trace] tracing the next %d frames\n", frames);
++    // The same frames also get one "draw-extent:" line per draw from aurora: where each draw lands.
++    GxWorker::Run([frames] { AuroraLogDrawExtents(frames); });
+ }
+ 
+ void Request(int frames) {
