@@ -1,0 +1,98 @@
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -498,10 +498,15 @@
+ // instead of infinity.
+ constexpr float kFarOutside = 1.0e30f;
+ 
+-// coversPicture is set when the draw also covers the picture from top to bottom.
++// coversPicture is set when the draw also covers the picture from top to bottom. When pictures keep
++// their shape, edge is set to -1 or 1 for a draw that starts at the picture's left or right edge
++// without spanning it - the end piece of a band built from several pieces - and inner to where it
++// ends on the other side.
+ static bool ortho_draw_fills_width(const u8* vertices, u16 vtxCount, u32 vtxStride, GXVtxFmt fmt,
+-                                   bool& coversPicture) noexcept {
++                                   bool& coversPicture, int& edge, float& inner) noexcept {
+   coversPicture = false;
++  edge = 0;
++  inner = 0.f;
+   const bool keepShapes = !s_widePictureStretchesBackgrounds.load(std::memory_order_relaxed);
+   if (picture_only_frame()) {
+     return false;
+@@ -578,6 +583,19 @@
+   const bool fillsHeight = lowest <= -WidePictureFullWidth && highest >= WidePictureFullWidth;
+   const bool fills = leftmost <= -WidePictureFullWidth && rightmost >= WidePictureFullWidth;
+   coversPicture = fills && fillsHeight;
++  // Right on the edge, not past it: a character or a line that runs on past the edge is not a band's
++  // end piece.
++  constexpr float kOnEdge = 0.985f;
++  constexpr float kPastEdge = 1.03f;
++  if (keepShapes && !fills) {
++    if (leftmost <= -kOnEdge && leftmost >= -kPastEdge) {
++      edge = -1;
++      inner = rightmost;
++    } else if (rightmost >= kOnEdge && rightmost <= kPastEdge) {
++      edge = 1;
++      inner = leftmost;
++    }
++  }
+   if (fills) {
+     static int s_reported = 0;
+     if (s_reported < 30) {
+@@ -697,10 +715,15 @@
+   }
+   if (g_gxState.projType == GX_ORTHOGRAPHIC && wide_picture_factor() > 1.f) {
+     bool coversPicture = false;
+-    const bool fillsWidth = ortho_draw_fills_width(vertices, vtxCount, vtxStride, fmt, coversPicture);
+-    if (fillsWidth != g_gxState.orthoDrawFillsWidth || coversPicture != g_gxState.orthoDrawCoversPicture) {
++    int edge = 0;
++    float inner = 0.f;
++    const bool fillsWidth = ortho_draw_fills_width(vertices, vtxCount, vtxStride, fmt, coversPicture, edge, inner);
++    if (fillsWidth != g_gxState.orthoDrawFillsWidth || coversPicture != g_gxState.orthoDrawCoversPicture ||
++        edge != g_gxState.orthoDrawEdge || inner != g_gxState.orthoDrawInner) {
+       g_gxState.orthoDrawFillsWidth = fillsWidth;
+       g_gxState.orthoDrawCoversPicture = coversPicture;
++      g_gxState.orthoDrawEdge = edge;
++      g_gxState.orthoDrawInner = inner;
+       g_gxState.dirty |= DirtyUniform;
+     }
+   }
+diff --git a/lib/gx/gx.hpp b/lib/gx/gx.hpp
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -412,6 +412,10 @@
+   bool orthoDrawFillsWidth = false;
+   // Whether it also covers the picture from top to bottom.
+   bool orthoDrawCoversPicture = false;
++  // Whether it is the end piece of a band, at the picture's left (-1) or right (1) edge, and where
++  // its other side is (see ortho_draw_fills_width).
++  int orthoDrawEdge = 0;
++  float orthoDrawInner = 0.f;
+   // EFB copies into textures since the last copy to the display, and how many the frame before had.
+   // A game draws what it reads back as a texture (a shadow, a blurred copy of the scene) before its
+   // last texture copy of the frame, and the picture shown on screen - its text, its clock - after.
+diff --git a/lib/gx/shader_info.cpp b/lib/gx/shader_info.cpp
+--- a/lib/gx/shader_info.cpp
++++ b/lib/gx/shader_info.cpp
+@@ -443,8 +443,19 @@
+   // AuroraSetWidePicture), which keeps its shadows and its culling in step with what is drawn.
+   if (const float wide = wide_picture_factor(); wide > 1.f && g_gxState.projType == GX_ORTHOGRAPHIC &&
+                                                 !g_gxState.orthoDrawFillsWidth) {
+-    proj.m0[0] /= wide;
+-    proj.m0[3] /= wide;
++    const int edge = g_gxState.orthoDrawEdge;
++    const float inner = g_gxState.orthoDrawInner;
++    if (edge != 0 && std::abs(static_cast<float>(edge) - inner) > 0.01f) {
++      // The end piece of a band: its outer side is pulled out to the frame's edge and its inner side
++      // stays where the rest of the band, kept in the middle, meets it. x' = scale * (x - edge) + edge.
++      const float outer = static_cast<float>(edge);
++      const float scale = (inner / wide - outer) / (inner - outer);
++      proj.m0 = proj.m0 * Vec4{scale, scale, scale, scale};
++      proj.m0[3] += outer - scale * outer;
++    } else {
++      proj.m0[0] /= wide;
++      proj.m0[3] /= wide;
++    }
+   }
+   // When pictures keep their shape (AuroraSetWidePictureStretchesBackgrounds off), a flat draw that
+   // covers the whole picture is enlarged evenly instead of stretched: its width already reaches both
