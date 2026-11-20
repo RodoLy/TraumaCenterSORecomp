@@ -67,3 +67,20 @@ Select" y "PRACTICE", así que no hizo falta agregar nada.
 
 **English.** The game already has "RETRY" in its pause menu (the + button or Enter), next to
 "Episode Select" and "PRACTICE", so nothing had to be added.
+
+## Selección de capítulo / Chapter select
+
+**Español.** En la pantalla de título, F10 > Mods > Chapter select > "Start at" elige un capítulo
+(1 a 6) o "Every episode". Después, New Game o cargar una partida: el Episode Select del juego ofrece
+todos los episodios hasta ese capítulo. Mientras esté activo **no se puede guardar** (el juego dice
+que falló al guardar) y tus datos no cambian. No se guarda en Config.toml: el juego siempre arranca
+normal.
+
+**English.** On the title screen, F10 > Mods > Chapter select > "Start at" picks a chapter (1 to 6)
+or "Every episode". Then start a New Game or load a file: the game's Episode Select offers every
+episode up to that chapter. While it is on, **saving is off** (the game says the save failed) and
+your data does not change. It is not kept in Config.toml: the game always starts normal.
+
+| Parche / Patch | Qué cambia / What it changes |
+|---|---|
+| `trauma-center-chapter-select.patch` | Nuevo `trauma_center_chapter_select.cpp`. 0x80015CFC prueba un bit del progreso (`*(0x803A7488)` + 0x40; el bit de un episodio es 0x50 + su número); con un capítulo elegido responde "alcanzado" para los episodios anteriores. 0x8001CEBC empieza toda escritura a la memoria del Wii; con un capítulo elegido no escribe y deja el error -1. / New `trauma_center_chapter_select.cpp`. 0x80015CFC tests a progress bit (`*(0x803A7488)` + 0x40; an episode's bit is 0x50 plus its number); with a chapter chosen it answers "reached" for the episodes before it. 0x8001CEBC starts every write to the Wii's memory; with a chapter chosen it writes nothing and leaves the error -1. |
