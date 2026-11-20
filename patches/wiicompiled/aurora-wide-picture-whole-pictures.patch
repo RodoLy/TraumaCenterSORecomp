@@ -1,0 +1,140 @@
+diff --git a/lib/gx/command_processor.cpp b/lib/gx/command_processor.cpp
+--- a/lib/gx/command_processor.cpp
++++ b/lib/gx/command_processor.cpp
+@@ -487,14 +487,17 @@
+ // That suits what a game draws flat on the screen - a clock, a text box - but not a draw that covers
+ // the whole frame: a fade to black, or the scene drawn back from a copy, has to reach the sides too.
+ // This tells the two apart by where the vertices of an orthographic draw land across the frame.
+-// AuroraSetWidePictureStretchesBackgrounds: when off, no flat draw counts as covering the frame, so
+-// every one keeps its 4:3 shape in the middle.
++// AuroraSetWidePictureStretchesBackgrounds: when off, a flat draw only counts when it covers the
++// whole picture, top to bottom as well as side to side (a backdrop, a fade, a tint over the scene);
++// one that only spans the width - a text box, a character drawn on a wide strip - keeps its 4:3 shape.
+ static std::atomic_bool s_widePictureStretchesBackgrounds{true};
+ 
++// The build assumes finite math, so the running minimum and maximum start from large numbers
++// instead of infinity.
++constexpr float kFarOutside = 1.0e30f;
++
+ static bool ortho_draw_fills_width(const u8* vertices, u16 vtxCount, u32 vtxStride, GXVtxFmt fmt) noexcept {
+-  if (!s_widePictureStretchesBackgrounds.load(std::memory_order_relaxed)) {
+-    return false;
+-  }
++  const bool wholePictureOnly = !s_widePictureStretchesBackgrounds.load(std::memory_order_relaxed);
+   const auto& state = g_gxState;
+   const GXAttrType positionSource = state.vtxDesc[GX_VA_POS];
+   if (positionSource == GX_NONE || vtxCount == 0 || vtxStride == 0) {
+@@ -512,8 +515,10 @@
+   const bool matrixPerVertex = state.vtxDesc[GX_VA_PNMTXIDX] == GX_DIRECT;
+   const auto& array = state.arrays[GX_VA_POS];
+ 
+-  float leftmost = std::numeric_limits<float>::infinity();
+-  float rightmost = -std::numeric_limits<float>::infinity();
++  float leftmost = kFarOutside;
++  float rightmost = -kFarOutside;
++  float lowest = kFarOutside;
++  float highest = -kFarOutside;
+   for (u16 i = 0; i < vtxCount; ++i) {
+     const u8* vertex = vertices + static_cast<size_t>(i) * vtxStride;
+     const u8* source = vertex + positionOffset;
+@@ -537,6 +542,11 @@
+     const float viewX = row[0] * position[0] + row[1] * position[1] + row[2] * position[2] + row[3];
+     // -1 is the left edge of the frame and 1 the right one.
+     const float frameX = state.proj.m0[0] * viewX + state.proj.m0[3];
++    const auto& rowY = state.pnMtx[matrix].pos.m1;
++    const float viewY = rowY[0] * position[0] + rowY[1] * position[1] + rowY[2] * position[2] + rowY[3];
++    const float frameY = state.proj.m1[1] * viewY + state.proj.m1[3];
++    lowest = std::min(lowest, frameY);
++    highest = std::max(highest, frameY);
+     // A draw that covers the frame lies right on its edges. A position far outside them (or not a
+     // number at all) means this vertex was not read the way the game laid it out, and a wrong
+     // guess here would stretch a letter of text out to the side; so the draw keeps the safe answer.
+@@ -554,7 +564,9 @@
+     leftmost = std::min(leftmost, frameX);
+     rightmost = std::max(rightmost, frameX);
+   }
+-  const bool fills = leftmost <= -WidePictureFullWidth && rightmost >= WidePictureFullWidth;
++  const bool fillsHeight = lowest <= -WidePictureFullWidth && highest >= WidePictureFullWidth;
++  const bool fills = leftmost <= -WidePictureFullWidth && rightmost >= WidePictureFullWidth &&
++                     (fillsHeight || !wholePictureOnly);
+   if (fills) {
+     static int s_reported = 0;
+     if (s_reported < 30) {
+@@ -629,10 +641,10 @@
+   // The GPU's copy of a perspective camera may already be the wide one; bring it back to 4:3.
+   const float wide = perspective ? std::max(1.f, wide_picture_factor()) : 1.f;
+   const float aspect = perspective && proj.m0[0] != 0.f ? proj.m1[1] / proj.m0[0] : 0.f;
+-  float left = std::numeric_limits<float>::infinity();
+-  float right = -left;
+-  float bottom = left;
+-  float top = -left;
++  float left = kFarOutside;
++  float right = -kFarOutside;
++  float bottom = kFarOutside;
++  float top = -kFarOutside;
+   int behind = 0;
+   for (u16 i = 0; i < vtxCount; ++i) {
+     float view[3];
+@@ -656,16 +668,6 @@
+     bottom = std::min(bottom, y);
+     top = std::max(top, y);
+   }
+-  if (vtxCount <= 4) {
+-    // The raw corners too, to check the reading: model position, then view position.
+-    for (u16 i = 0; i < vtxCount; ++i) {
+-      float view[3];
+-      read_view_position(vertices + static_cast<size_t>(i) * vtxStride, fmt, view);
+-      Log.info("draw-extent:   corner {} view {:.2f} {:.2f} {:.2f} matrix {} pos {}", i, view[0], view[1], view[2],
+-               g_gxState.vtxDesc[GX_VA_PNMTXIDX] == GX_DIRECT ? -1 : static_cast<int>(g_gxState.currentPnMtx),
+-               static_cast<int>(g_gxState.vtxDesc[GX_VA_POS]));
+-    }
+-  }
+   Log.info("draw-extent: {} verts={}{} x {:.3f} to {:.3f} y {:.3f} to {:.3f} behind={} aspect={:.3f} fills={} "
+            "copies={}",
+            perspective ? "persp" : "ortho", vtxCount, fromDisplayList ? " list" : "", left, right, bottom, top,
+@@ -1264,6 +1266,10 @@
+   }
+ }
+ 
++bool wide_picture_keeps_shapes() noexcept {
++  return !s_widePictureStretchesBackgrounds.load(std::memory_order_relaxed);
++}
++
+ void set_wide_picture_stretches_backgrounds(bool stretch) noexcept {
+   s_widePictureStretchesBackgrounds.store(stretch, std::memory_order_relaxed);
+ }
+diff --git a/lib/gx/gx.hpp b/lib/gx/gx.hpp
+--- a/lib/gx/gx.hpp
++++ b/lib/gx/gx.hpp
+@@ -471,6 +471,10 @@
+ float wide_picture_factor() noexcept;
+ // The share of the frame's width a viewport, a scissor or a draw must span to count as the whole frame.
+ inline constexpr float WidePictureFullWidth = 0.97f;
++namespace fifo {
++// Whether pictures keep their shape in a wide frame (AuroraSetWidePictureStretchesBackgrounds off).
++bool wide_picture_keeps_shapes() noexcept;
++} // namespace fifo
+ void clear_static_texture_cache() noexcept;
+ void clear_copy_texture_cache() noexcept;
+ void evict_copy_texture(const void* dest) noexcept;
+diff --git a/lib/gx/shader_info.cpp b/lib/gx/shader_info.cpp
+--- a/lib/gx/shader_info.cpp
++++ b/lib/gx/shader_info.cpp
+@@ -446,6 +446,17 @@
+     proj.m0[0] /= wide;
+     proj.m0[3] /= wide;
+   }
++  // When pictures keep their shape (AuroraSetWidePictureStretchesBackgrounds off), a flat draw that
++  // covers the whole picture is enlarged evenly instead of stretched: its width already reaches both
++  // sides, so its height grows by as much and a little of its top and bottom is cut. A draw made
++  // after the frame's first texture copy may be the scene itself drawn back from that copy, which is
++  // already as wide as the frame, so it is only stretched.
++  if (const float wide = wide_picture_factor(); wide > 1.f && g_gxState.projType == GX_ORTHOGRAPHIC &&
++                                                g_gxState.orthoDrawFillsWidth && g_gxState.texCopiesThisFrame == 0 &&
++                                                fifo::wide_picture_keeps_shapes()) {
++    proj.m1[1] *= wide;
++    proj.m1[3] *= wide;
++  }
+   if constexpr (UseReversedZ) {
+     proj.m2 = proj.m2 * Vec4{-1.f, -1.f, -1.f, -1.f};
+   } else {
