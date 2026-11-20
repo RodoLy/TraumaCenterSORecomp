@@ -1,0 +1,430 @@
+diff --git a/runtime/src/hle/game_mods/trauma_center_waits.cpp b/runtime/src/hle/game_mods/trauma_center_waits.cpp
+--- a/runtime/src/hle/game_mods/trauma_center_waits.cpp
++++ b/runtime/src/hle/game_mods/trauma_center_waits.cpp
+@@ -19,7 +19,6 @@
+ #include "hle_stubs.h"
+ #include "memory.h"
+ #include "runtime_log.h"
+-#include "hle/gx/gx_frame_trace.h"
+ #include "foreign_game_options.h"
+ 
+ #include <SDL3/SDL_keyboard.h>
+@@ -49,19 +48,6 @@
+     InvokeIndirectCpu(kVIWaitForRetrace, ctx);
+ }
+ 
+-// The file name a load asks for, for the log (at most 63 characters).
+-std::string GuestText(uint32_t address) {
+-    std::string text;
+-    for (uint32_t i = 0; address != 0 && i < 63; ++i) {
+-        const char c = static_cast<char>(Memory::Read8(address + i));
+-        if (c == 0) {
+-            break;
+-        }
+-        text.push_back(c);
+-    }
+-    return text;
+-}
+-
+ // ---------------------------------------------------------------- the sound streaming thread
+ //
+ // The thread at 0x8006F8B0 (started by cadThread.cpp's helper 0x80016A08 right after AIInit and
+@@ -135,251 +121,9 @@
+ // 0x8006F8B0: the sound streaming thread's entry. It never returns, like the original.
+ namespace TraumaCenterWaits {
+ namespace {
+-// While the screen stays black: the HOME button library's loader (its state at +0x94 goes 0, 1, 2 and
+-// the main loop runs the game only at 2) and the five files it waits for (each done at state 4), and
+-// the main loop's flags. Logged each time one of them changes, so the log shows where start-up stops.
+-constexpr uint32_t kHomeButtonLoader = 0x803A7688u; // -0x7038(r13)
+-constexpr uint32_t kMainLoopFlags = 0x803A73FCu;    // -0x72C4(r13)
+-
+-uint32_t ReadIfGuest(uint32_t address) {
+-    return (address >= 0x80000000u && address < 0x81800000u) ? Memory::Read32(address) : 0xFFFFFFFFu;
+-}
+-
+-void LogStartUpState() {
+-    static uint32_t s_last[8] = {0xDEADBEEFu};
+-    uint32_t now[8] = {};
+-    const uint32_t loader = Memory::Read32(kHomeButtonLoader);
+-    now[0] = loader;
+-    now[1] = loader != 0 ? ReadIfGuest(loader + 0x94u) : 0;
+-    for (uint32_t i = 0; i < 5; ++i) {
+-        const uint32_t file = loader != 0 ? ReadIfGuest(loader + 0x9Cu + i * 4u) : 0;
+-        now[2 + i] = (file != 0 && file != 0xFFFFFFFFu) ? ReadIfGuest(file + 0x0Cu) : 0xFFFFFFFFu;
+-    }
+-    now[7] = Memory::Read32(kMainLoopFlags);
+-    bool changed = false;
+-    for (int i = 0; i < 8; ++i) {
+-        changed |= now[i] != s_last[i];
+-        s_last[i] = now[i];
+-    }
+-    if (changed) {
+-        RT_LOG(RT_TAG_MOD) << "[start-up] home loader 0x" << std::hex << now[0] << " state " << now[1]
+-                           << " files " << now[2] << " " << now[3] << " " << now[4] << " " << now[5]
+-                           << " " << now[6] << " main flags 0x" << now[7] << std::dec << std::endl;
+-    }
+-}
+-} // namespace
+-} // namespace TraumaCenterWaits
+-
+-namespace TraumaCenterWaits {
+-namespace {
+-// The title scene waits for the "slCheck" task (the save check), which waits for the save task. Both
+-// are the game's own tasks; 0x8000DD4C finds one by name and its work area is at +0x38. Their steps
+-// and results are logged when they change.
+-constexpr uint32_t kFindTask = 0x8000DD4Cu;
+-constexpr uint32_t kSaveCheckTaskName = 0x803A6850u; // "slCheck"
+-constexpr uint32_t kSaveTaskName = 0x80228A48u;
+-
+-void LogSaveTasks(CpuContext* ctx) {
+-    static uint32_t s_last[6] = {0xDEADBEEFu};
+-    uint32_t now[6] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
+-    if (const uint32_t check = Call(kFindTask, ctx, {kSaveCheckTaskName})) {
+-        const uint32_t work = Memory::Read32(check + 0x38u);
+-        now[0] = Memory::Read32(work);
+-        now[1] = Memory::Read32(work + 0x12Cu);
+-        now[2] = Memory::Read32(work + 0x130u);
+-    }
+-    if (const uint32_t save = Call(kFindTask, ctx, {kSaveTaskName})) {
+-        const uint32_t work = Memory::Read32(save + 0x38u);
+-        now[3] = Memory::Read32(work + 0x04u);
+-        now[4] = Memory::Read32(work + 0x08u);
+-        now[5] = Memory::Read32(work + 0x124u);
+-    }
+-    bool changed = false;
+-    for (int i = 0; i < 6; ++i) {
+-        changed |= now[i] != s_last[i];
+-        s_last[i] = now[i];
+-    }
+-    if (changed) {
+-        RT_LOG(RT_TAG_MOD) << "[start-up] slCheck step " << static_cast<int32_t>(now[0]) << " (0x12C "
+-                           << static_cast<int32_t>(now[1]) << ", 0x130 " << static_cast<int32_t>(now[2])
+-                           << "), save task step " << static_cast<int32_t>(now[3]) << " (8 "
+-                           << static_cast<int32_t>(now[4]) << ", result " << static_cast<int32_t>(now[5])
+-                           << ")" << std::endl;
+-    }
+-}
+-} // namespace
+-} // namespace TraumaCenterWaits
+-
+-namespace TraumaCenterWaits {
+-namespace {
+-// The game draws its 3D scenes from a table at 0x80282E98: eight bytes per scene, flags then the
+-// NW4R g3d ScnRoot. ScnRoot::DrawOpa draws what the gather object at +0xB8 collected. No model has
+-// been drawn yet, so log each scene's flags, its root and the gather object's first words when they
+-// change, to see whether the gathered lists are empty.
+-constexpr uint32_t kSceneTable = 0x80282E98u;
+-constexpr int kScenesLogged = 4;
+-constexpr int kGatherWords = 8;
+-constexpr int kRootWords = 10; // the root's words from +0x98: its ScnGroup child list sits before +0xB8
+-
+-void LogScenes() {
+-    static uint32_t s_last[kScenesLogged][2 + kGatherWords + kRootWords] = {};
+-    for (int scene = 0; scene < kScenesLogged; ++scene) {
+-        uint32_t now[2 + kGatherWords + kRootWords] = {};
+-        now[0] = Memory::Read32(kSceneTable + scene * 8u);
+-        now[1] = Memory::Read32(kSceneTable + scene * 8u + 4u);
+-        const uint32_t gather = now[1] != 0 ? ReadIfGuest(now[1] + 0xB8u) : 0;
+-        for (int i = 0; i < kGatherWords; ++i) {
+-            now[2 + i] = (gather != 0 && gather != 0xFFFFFFFFu) ? ReadIfGuest(gather + i * 4u) : 0;
+-        }
+-        for (int i = 0; i < kRootWords; ++i) {
+-            now[2 + kGatherWords + i] = now[1] != 0 ? ReadIfGuest(now[1] + 0x98u + i * 4u) : 0;
+-        }
+-        if (std::memcmp(now, s_last[scene], sizeof(now)) == 0) {
+-            continue;
+-        }
+-        std::memcpy(s_last[scene], now, sizeof(now));
+-        auto& log = RT_LOG(RT_TAG_MOD);
+-        log << "[start-up] scene " << scene << " flags 0x" << std::hex << now[0] << " root 0x" << now[1]
+-            << " gather";
+-        for (int i = 0; i < kGatherWords; ++i) {
+-            log << " " << now[2 + i];
+-        }
+-        log << " root+0x98";
+-        for (int i = 0; i < kRootWords; ++i) {
+-            log << " " << now[2 + kGatherWords + i];
+-        }
+-        log << std::dec << std::endl;
+-    }
+-}
+-} // namespace
+-} // namespace TraumaCenterWaits
+-
+-namespace TraumaCenterWaits {
+-namespace {
+-// The game's own tasks sit in three lists (-0x7290, -0x7278 and -0x7284 off r13). Each task keeps its
+-// name at +0, its next task at +0x3C and its two functions at +0x30 and +0x34. The scenes stay empty
+-// on the title screen, so log the running tasks whenever the set changes, to see which are missing.
+-constexpr uint32_t kTaskLists[3] = {0x803A7430u, 0x803A7448u, 0x803A743Cu};
+-
+-void LogTasks() {
+-    static std::string s_last;
+-    std::string now;
+-    for (int list = 0; list < 3; ++list) {
+-        now += list == 0 ? "" : " |";
+-        uint32_t task = Memory::Read32(kTaskLists[list]);
+-        for (int count = 0; task >= 0x80000000u && task < 0x81800000u && count < 64; ++count) {
+-            // Also the first four words of its work area (+0x38), where a task keeps its own step.
+-            const uint32_t work = Memory::Read32(task + 0x38u);
+-            uint32_t step[4] = {};
+-            for (uint32_t i = 0; i < 4; ++i) {
+-                step[i] = (work >= 0x80000000u && work < 0x81800000u) ? Memory::Read32(work + i * 4u) : 0;
+-            }
+-            char line[160];
+-            std::snprintf(line, sizeof(line), " %s(%08x,%08x work %08x:%x,%x,%x,%x)", GuestText(task).c_str(),
+-                          Memory::Read32(task + 0x30u), Memory::Read32(task + 0x34u), work, step[0], step[1],
+-                          step[2], step[3]);
+-            now += line;
+-            task = Memory::Read32(task + 0x3Cu);
+-        }
+-    }
+-    if (now != s_last) {
+-        s_last = now;
+-        RT_LOG(RT_TAG_MOD) << "[start-up] tasks:" << now << std::endl;
+-    }
+-}
+-} // namespace
+-} // namespace TraumaCenterWaits
+-
+-namespace TraumaCenterWaits {
+-namespace {
+-// The title screen's 2D pieces are drawn every frame but come out with alpha 0. Once a second, log
+-// the values an animation would move with (the frame time the main loop computes at -0x7268 and
+-// -0x72C8, the bus clock it divides by) and the first words of the TTL DRAW PROC work area, where the
+-// title keeps its own step and, likely, its fade. Also take two frame traces by itself (as F9 does),
+-// 5 and 20 seconds into the title screen, so no key has to be pressed.
+-constexpr uint32_t kFrameTime = 0x803A7458u;      // -0x7268(r13), a float
+-constexpr uint32_t kFrameTimeBase = 0x803A73F8u;  // -0x72C8(r13), a float
+-constexpr uint32_t kBusClock = 0x800000F8u;
+-constexpr int kTitleWords = 24;
+-
+-uint32_t FindTaskByName(const char* name) {
+-    for (uint32_t list : kTaskLists) {
+-        uint32_t task = Memory::Read32(list);
+-        for (int count = 0; task >= 0x80000000u && task < 0x81800000u && count < 64; ++count) {
+-            if (GuestText(task) == name) {
+-                return task;
+-            }
+-            task = Memory::Read32(task + 0x3Cu);
+-        }
+-    }
+-    return 0;
+-}
+-
+-void LogTitleAnimation() {
+-    static uint32_t s_retraces = 0;
+-    static uint32_t s_titleRetraces = 0;
+-    ++s_retraces;
+-    const uint32_t titleDraw = FindTaskByName("TTL DRAW PROC");
+-    if (titleDraw == 0) {
+-        return;
+-    }
+-    ++s_titleRetraces;
+-    if (s_titleRetraces == 300 || s_titleRetraces == 1200) {
+-        RT_LOG(RT_TAG_MOD) << "[start-up] taking a frame trace on the title screen" << std::endl;
+-        GxFrameTrace::Request(3);
+-    }
+-    if (s_retraces % 60 != 0) {
+-        return;
+-    }
+-    const uint32_t work = Memory::Read32(titleDraw + 0x38u);
+-    float frameTime;
+-    float frameTimeBase;
+-    const uint32_t frameTimeBits = Memory::Read32(kFrameTime);
+-    const uint32_t frameTimeBaseBits = Memory::Read32(kFrameTimeBase);
+-    std::memcpy(&frameTime, &frameTimeBits, sizeof(frameTime));
+-    std::memcpy(&frameTimeBase, &frameTimeBaseBits, sizeof(frameTimeBase));
+-    auto& log = RT_LOG(RT_TAG_MOD);
+-    log << "[start-up] title: frame time " << frameTime << " base " << frameTimeBase << " bus clock "
+-        << Memory::Read32(kBusClock) << " draw work 0x" << std::hex << work << ":";
+-    for (int i = 0; i < kTitleWords; ++i) {
+-        log << " " << ((work >= 0x80000000u && work < 0x81800000u) ? Memory::Read32(work + i * 4u) : 0u);
+-    }
+-    log << std::dec << std::endl;
+-}
+-} // namespace
+-} // namespace TraumaCenterWaits
++// The main loop's flags: bit 0x2 stops the game's own work (a pause).
++constexpr uint32_t kMainLoopFlags = 0x803A73FCu; // -0x72C4(r13)
+ 
+-namespace TraumaCenterWaits {
+-namespace {
+-// The opening movie: the screen shows the movie's "Skip" but no frame. The game's THP player keeps its
+-// state at 0x80287320; its decoder (0x80018034) only decodes once the reader thread has filled the
+-// current read buffer (+0xB4 picks it; each buffer is 0xC bytes from +0xD4, filled when +0xDC is set).
+-// Log the player's words from +0x60 to +0x190 once a second when they change.
+-constexpr uint32_t kMoviePlayer = 0x80287320u;
+-constexpr uint32_t kMovieFirstWord = 0x60u;
+-constexpr int kMovieWords = (0x190 - 0x60) / 4;
+-
+-void LogMoviePlayer() {
+-    static uint32_t s_retraces = 0;
+-    static uint32_t s_last[kMovieWords] = {};
+-    if (++s_retraces % 60 != 0) {
+-        return;
+-    }
+-    uint32_t now[kMovieWords];
+-    for (int i = 0; i < kMovieWords; ++i) {
+-        now[i] = Memory::Read32(kMoviePlayer + kMovieFirstWord + i * 4u);
+-    }
+-    if (std::memcmp(now, s_last, sizeof(now)) == 0) {
+-        return;
+-    }
+-    std::memcpy(s_last, now, sizeof(now));
+-    auto& log = RT_LOG(RT_TAG_MOD);
+-    log << "[movie] player +0x60:" << std::hex;
+-    for (int i = 0; i < kMovieWords; ++i) {
+-        log << (i % 8 == 0 ? "  " : " ") << now[i];
+-    }
+-    log << std::dec << std::endl;
+-}
+ // Stops the game while its window is in the background, the way the game pauses itself while it
+ // loads: bit 0x2 of the main loop's flags stops the game's own work, and setting the counter at
+ // -0x7F80(r13) to 5 lets the main loop clear the bit again five frames later. A pause the game made
+@@ -417,12 +161,6 @@
+ extern "C" void TraumaCenterSoundThreadLoop(CpuContext* ctx) {
+     using namespace TraumaCenterWaits;
+     for (;;) {
+-        LogStartUpState();
+-        LogSaveTasks(ctx);
+-        LogScenes();
+-        LogTasks();
+-        LogTitleAnimation();
+-        LogMoviePlayer();
+         PauseWhileInBackground();
+         if (const uint32_t record = DoneRecord(kDoneSlot)) {
+             MarkFinished(record);
+@@ -452,16 +190,8 @@
+     } else {
+         // Like the game, the block allocated above is not freed on this path.
+         request = Call(kStartLoad, ctx, {name, extra});
+-        // A load that never ends leaves the screen black with nothing in the log, so say which file
+-        // it is: once when it starts and again if it is still not done after ten seconds.
+-        RT_LOG(RT_TAG_MOD) << "[load] " << GuestText(name) << std::endl;
+-        uint32_t retraces = 0;
+         while ((Memory::Read32(request) & 1u) == 0) {
+             WaitForRetrace(ctx);
+-            if (++retraces == 600) {
+-                RT_LOG(RT_TAG_MOD) << "[load] still waiting for " << GuestText(name) << " (request 0x"
+-                                   << std::hex << request << std::dec << ")" << std::endl;
+-            }
+         }
+         if (sizeOut != 0) {
+             Memory::Write32(sizeOut, Memory::Read32(request + 0x40u));
+@@ -506,79 +236,6 @@
+ }
+ FOREIGN_GAME_WRAPPER(RKDEEB, 8016A828, TraumaCenterWPADGetStatus);
+ 
+-// The main loop stops running the game while its flags have bit 0x2 set. 0x8000A574 sets it (and the
+-// counter at -0x7F80(r13) to -1); 0x8000A5D4 sets that counter to 5, and five frames later the main
+-// loop clears the bit again. Both are called from many places, so for now these two do exactly what
+-// the game's code does and also log who called them, to find the pause that is never undone.
+-// El ciclo principal no corre el juego mientras la bandera 0x2 está puesta; aquí se anota quién la pone
+-// y quién la quita, para encontrar la pausa que nunca se deshace.
+-namespace TraumaCenterWaits {
+-namespace {
+-constexpr uint32_t kPauseCounter = 0x803A6740u;     // -0x7F80(r13)
+-constexpr uint32_t kFadePending = 0x803A7404u;      // -0x72BC(r13), a byte
+-constexpr uint32_t kFadeFirstValue = 0x803A7408u;   // -0x72B8(r13), a float
+-constexpr uint32_t kFadeSecondValue = 0x803A740Cu;  // -0x72B4(r13), a float
+-constexpr uint32_t kStopFade = 0x8000E9DCu;
+-constexpr uint32_t kSetFade = 0x8000E9B4u;
+-constexpr int kCallsLogged = 40;
+-
+-float ReadFloat(uint32_t address) {
+-    const uint32_t bits = Memory::Read32(address);
+-    float value;
+-    std::memcpy(&value, &bits, sizeof(value));
+-    return value;
+-}
+-} // namespace
+-} // namespace TraumaCenterWaits
+-
+-extern "C" void TraumaCenterPauseGame(CpuContext* ctx) {
+-    using namespace TraumaCenterWaits;
+-    const uint32_t returnAddress = ctx->lr;
+-    static int s_logged = 0;
+-    if (s_logged < kCallsLogged && returnAddress != 0x8003E5ACu) {
+-        ++s_logged;
+-        RT_LOG(RT_TAG_MOD) << "[start-up] pause from 0x" << std::hex << returnAddress - 4 << std::dec << std::endl;
+-    }
+-    // The title scene (0x8003E588) pauses the game every frame and keeps its own step at r31's
+-    // address: 0 starts a fade, 1 waits for it, 2 starts the "TTL DRAW FILE SETUP" task that loads
+-    // title.pak, 3 waits for that task (its state at -0x6E34(r13), done at 3), 4 runs the menu.
+-    if (returnAddress == 0x8003E5ACu) {
+-        static uint32_t s_lastStep = 0xFFFFFFFFu;
+-        static uint32_t s_lastTask = 0xFFFFFFFFu;
+-        const uint32_t step = Memory::Read32(ctx->gpr[31]);
+-        const uint32_t task = Memory::Read32(0x803A788Cu); // -0x6E34(r13)
+-        const uint32_t taskState = task != 0 ? Memory::Read32(task) : 0xFFFFFFFFu;
+-        if (step != s_lastStep || taskState != s_lastTask) {
+-            s_lastStep = step;
+-            s_lastTask = taskState;
+-            RT_LOG(RT_TAG_MOD) << "[start-up] title scene step " << step << ", file setup task 0x" << std::hex
+-                               << task << " state " << taskState << std::dec << std::endl;
+-        }
+-    }
+-    if (Memory::Read8(kFadePending) != 0) {
+-        Call(kStopFade, ctx, {0});
+-        ctx->fpr[1].d = ReadFloat(kFadeFirstValue);
+-        ctx->fpr[2].d = ReadFloat(kFadeSecondValue);
+-        Call(kSetFade, ctx, {0});
+-        Memory::Write8(kFadePending, 0);
+-    }
+-    Memory::Write32(kPauseCounter, 0xFFFFFFFFu);
+-    Memory::Write32(kMainLoopFlags, (Memory::Read32(kMainLoopFlags) & ~1u) | 2u);
+-    ctx->lr = returnAddress;
+-}
+-FOREIGN_GAME_WRAPPER(RKDEEB, 8000A574, TraumaCenterPauseGame);
+-
+-extern "C" void TraumaCenterResumeGame(CpuContext* ctx) {
+-    using namespace TraumaCenterWaits;
+-    static int s_logged = 0;
+-    if (s_logged < kCallsLogged) {
+-        ++s_logged;
+-        RT_LOG(RT_TAG_MOD) << "[start-up] resume from 0x" << std::hex << ctx->lr - 4 << std::dec << std::endl;
+-    }
+-    Memory::Write32(kPauseCounter, 5);
+-}
+-FOREIGN_GAME_WRAPPER(RKDEEB, 8000A5D4, TraumaCenterResumeGame);
+-
+ // PPCMfhid2 reads the CPU's HID2 register. THPVideoDecode, the movie decoder, checks its locked-cache
+ // bit (0x10000000) and refuses to decode a frame without it: the opening movie then shows only its
+ // "Skip" prompt. LCEnable sets that bit on a Wii; here the runtime emulates the locked cache but its
+diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hle/bluetooth/emulated_remote_host.cpp
+--- a/runtime/src/hle/bluetooth/emulated_remote_host.cpp
++++ b/runtime/src/hle/bluetooth/emulated_remote_host.cpp
+@@ -189,23 +189,6 @@
+     input.pointerY = kpadY / kKpadPerGivenY;
+ }
+ 
+-// To line the game's pointer up with the mouse: twice a second, the pointer this remote is given and
+-// where the game's KPAD put it. KPADRead fills ten 0x88-byte samples per remote from 0x80281578,
+-// newest first, with the pointer's position (-1..1) at +0x20 and +0x24.
+-void LogPointerCalibration(const EmulatedInput& input) {
+-    constexpr uint32_t kKpadStatus = 0x80281578u;
+-    constexpr uint64_t kEveryUs = 500000;
+-    static uint64_t s_lastUs = 0;
+-    const uint64_t now = NowUs();
+-    if (!input.pointerValid || now - s_lastUs < kEveryUs) {
+-        return;
+-    }
+-    s_lastUs = now;
+-    RT_LOG(RT_TAG_MOD) << "[pointer] given " << input.pointerX << " " << input.pointerY << " game "
+-                       << ReadGuestFloat(kKpadStatus + 0x20u) << " " << ReadGuestFloat(kKpadStatus + 0x24u)
+-                       << std::endl;
+-}
+-
+ // True once the left button has been held for kPinchAfterUs without a break.
+ bool HeldLongEnoughToPinch(bool held) {
+     constexpr uint64_t kPinchAfterUs = 120000;
+@@ -296,7 +279,6 @@
+             const bool onPicture = TraumaCenterMouse::ToGamePicture(x, y, width, height, gameX, gameY);
+             TraumaCenterMouse::AimAtPicture(gameX, gameY, input);
+             leftIsTool = TraumaCenterMouse::PushToolStick(left, onPicture, gameX, gameY, input);
+-            TraumaCenterMouse::LogPointerCalibration(input);
+         }
+         if (left && !leftIsTool) input.buttons |= RemoteButton::kA;
+         if (TraumaCenterMouse::IsRunning() && TraumaCenterMouse::HeldLongEnoughToPinch(left && !leftIsTool)) {
