@@ -1,28 +1,27 @@
 # Comodidades / Quality of life
 
 Cambios que no alteran el juego, solo lo hacen más cómodo en PC. Cada uno vive en su propio parche
-dentro de `patches/wiicompiled/` y se puede apagar desde F10 o desde `UserData/Config.toml`.
+dentro de `patches/wiicompiled/`, viene apagado para que el juego arranque como el original, y se
+enciende desde F10 o desde `UserData/Config.toml`.
 
 Changes that leave the game itself alone and only make it more comfortable on a PC. Each one lives
-in its own patch in `patches/wiicompiled/` and can be turned off in F10 or in `UserData/Config.toml`.
+in its own patch in `patches/wiicompiled/`, starts off so the game starts like the original, and can
+be turned on in F10 or in `UserData/Config.toml`.
 
 ## Adelantar el texto / Hurrying text along
 
-**Español.** Mantener presionada la tecla Tab hace que todo el juego corra hasta cuatro veces más
-rápido; sirve para pasar los diálogos largos. Ahora viene encendido. La tecla (y un botón del
-control) se cambian en F10 > Controls > "Hold to fast-forward".
+**Español.** Mantener presionada una tecla hace que todo el juego corra hasta cuatro veces más
+rápido; sirve para pasar los diálogos largos. Viene apagado, como el juego original. Se enciende en
+F10 > Controls > "Hold to fast-forward" (la tecla empieza como Tab y se puede cambiar, igual que un
+botón del control).
 
-**English.** Holding Tab runs the whole game up to four times faster, which hurries long dialogue
-along. It is now on by default. The key (and a controller button) can be changed in F10 > Controls >
-"Hold to fast-forward".
-
-| Parche / Patch | Qué cambia / What it changes |
-|---|---|
-| `trauma-center-fast-forward-on.patch` | `vi.cpp` y `settings_overlay.cpp`: el valor por defecto pasa de apagado a encendido. / The default goes from off to on. |
+**English.** Holding a key runs the whole game up to four times faster, which hurries long dialogue
+along. It starts off, like the original game. Turn it on in F10 > Controls > "Hold to fast-forward"
+(the key starts as Tab and can be changed, and so can a controller button).
 
 ```toml
 [speed]
-hold_to_fast_forward = false   # para apagarlo / to turn it off
+hold_to_fast_forward = true   # para encenderlo / to turn it on
 ```
 
 ## Pausa con la ventana en segundo plano / Pause in the background
