@@ -63,27 +63,27 @@ a un Wii Remote con Nunchuk. El modo stylus solo cambia **qué** le manda al jue
 
 ### Los textos
 
-Los diálogos de las operaciones están en `files/operation/msg_ope/opeXXX.bm2` (y empaquetados en
-`msg_ope.pak`), los de las escenas en `msg_evt` y los de las conferencias de cada caso en `msg_cnf`.
-Usan el formato de mensajes de Atlus «MSG2»: cabecera `MSG2`, una tabla de mensajes y el texto en ASCII
-con códigos de control en medio (pausas, colores, cara del personaje).
+Las líneas de los tutoriales que nombran botones del Wii Remote se cambian según el modo elegido,
+cuando el juego las lee del disco (`trauma-center-control-texts.patch`,
+`runtime/src/hle/game_mods/trauma_center_control_texts.cpp`). Son 14 líneas:
 
-El mod **no trae el guion del juego**. Trae solo una tabla con el archivo, el número de mensaje y una
-frase nueva escrita por nosotros. Al cargar esos archivos de tu disco, WiiCompiled reemplaza esos
-mensajes al vuelo, conservando los códigos de control del original, y solo en modo stylus.
+| Dónde | Qué dice el juego | Solo mouse | Mouse y teclado | Mouse y control |
+|---|---|---|---|---|
+| Pinzas (operación 1-1) | A y B | mantener el clic izquierdo | Espacio o el clic izquierdo | sin cambio |
+| Ultrasonido (1-2) | B | clic derecho | Shift izquierdo | sin cambio |
+| Lupa (1-5) | A | clic | clic | sin cambio |
+| Desfibrilador (1-8) | B y Z juntos | mantener el clic derecho | Shift izquierdo y Q | B y LT (L2) |
+| Healing Touch (2-3) | Z, luego B | mantener el clic derecho | Q, luego Shift izquierdo | LT (L2), luego B |
+| Menú de episodios | Z o C para la dificultad | botón de en medio o lateral | Q o E | LT o RT (L2/R2) |
 
-Pasos:
+Cada línea nueva es igual o más corta que la original (se rellena con espacios), así que los archivos
+no cambian de tamaño. El texto del juego no está en el repositorio: la tabla guarda la posición, el
+largo y un hash de cada línea, y antes de cambiarla se revisa ese hash contra el disco.
+`tools/control_texts.py` vuelve a generar la tabla desde el disco. Los textos se leen al iniciar el
+juego, así que un cambio de modo se ve en ellos después de reiniciar.
 
-1. Leer y escribir el formato MSG2 (herramienta en `tools/`, con pruebas).
-2. Listar los mensajes que hablan de controles: stick, A, B, Z, «Wii Remote», «Nunchuk», empujar,
-   girar. La búsqueda se hace sobre el disco del usuario y la lista guarda solo números de mensaje.
-3. Escribir las frases nuevas (en inglés, como el juego), cuidando que quepan en el cuadro de texto.
-4. Reemplazarlas al cargar el archivo, en el lector de DVD de WiiCompiled.
-5. Revisar cada operación del tutorial en el juego.
-
-Más adelante, la misma tabla sirve para la traducción al español del disco europeo.
-
----
+Falta: la imagen de ayuda de controles de la pausa (`pause/i_allcon_help01.tpx`) es una textura, no
+texto.
 
 ## English
 
@@ -144,22 +144,23 @@ the mouse into a Wii Remote with a Nunchuk. Stylus mode only changes **what** it
 
 ### The text
 
-The operations' dialogue is in `files/operation/msg_ope/opeXXX.bm2` (and packed in `msg_ope.pak`), the
-story scenes' in `msg_evt` and each case's briefing in `msg_cnf`. They use Atlus's "MSG2" message
-format: a `MSG2` header, a message table and ASCII text with control codes in between (pauses,
-colours, the character's face).
+The tutorial lines that name the Wii Remote's buttons are swapped for the chosen mode as the game
+reads them from the disc (`trauma-center-control-texts.patch`,
+`runtime/src/hle/game_mods/trauma_center_control_texts.cpp`). There are 14 lines:
 
-The mod **does not ship the game's script**. It only ships a table with the file, the message number
-and a new line we wrote ourselves. When those files load from your disc, WiiCompiled replaces those
-messages on the fly, keeping the original's control codes, and only in stylus mode.
+| Where | What the game says | Mouse only | Mouse and keyboard | Mouse and controller |
+|---|---|---|---|---|
+| Forceps (operation 1-1) | A and B | hold the left button | Space or the left button | unchanged |
+| Ultrasound (1-2) | B | right button | Left Shift | unchanged |
+| Magnifier (1-5) | A | click | click | unchanged |
+| Defibrillator (1-8) | B and Z together | hold the right button | Left Shift and Q | B and LT (L2) |
+| Healing Touch (2-3) | Z, then B | hold the right button | Q, then Left Shift | LT (L2), then B |
+| Episode menu | Z or C for the difficulty | middle or side button | Q or E | LT or RT (L2/R2) |
 
-Steps:
+Every new line is as long as the original or shorter (padded with spaces), so the files keep their
+size. The game's text is not in the repository: the table keeps each line's position, length and a
+hash, and the hash is checked against the disc before the line is changed. `tools/control_texts.py`
+regenerates the table from the disc. The texts are read when the game starts, so a new mode shows in
+them after a restart.
 
-1. Read and write the MSG2 format (a tool in `tools/`, with tests).
-2. List the messages that talk about controls: stick, A, B, Z, "Wii Remote", "Nunchuk", push, turn.
-   The search runs on the user's disc and the list keeps only message numbers.
-3. Write the new lines (in English, like the game), making sure they fit the text box.
-4. Replace them when the file loads, in WiiCompiled's DVD reader.
-5. Check every tutorial operation in the game.
-
-Later on, the same table can carry the Spanish translation from the European disc.
+Still to do: the pause menu's controls help (`pause/i_allcon_help01.tpx`) is a picture, not text.

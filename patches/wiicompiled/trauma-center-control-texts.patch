@@ -1,0 +1,184 @@
+diff --git a/runtime/src/hle/storage/dvd.cpp b/runtime/src/hle/storage/dvd.cpp
+--- a/runtime/src/hle/storage/dvd.cpp
++++ b/runtime/src/hle/storage/dvd.cpp
+@@ -4,6 +4,7 @@
+ #include "hle/runtime_parse_helpers.h"
+ #include "memory.h"
+ #include "guest_abi/guest_region.h"
++#include "hle/game_mods/trauma_center_control_texts.h"
+ 
+ // Defined in hle/gx/gx_objects.cpp. DVD reads are DMA-class writes to guest
+ // RAM: the game brackets them with DCInvalidateRange (not a flush), so the GX
+@@ -931,6 +932,7 @@
+                             DvdReadContract::Describe(failure));
+     }
+ 
++    TraumaCenterControlTexts::Apply(entry.hostPath, uOffset, tempBuf);
+     CopyToGuestAsDma(bufferPtr, tempBuf.data(), uLength);
+ 
+     // A game that is being brought up and shows nothing: which files it reads says how far it got.
+@@ -1015,6 +1017,7 @@
+                                          readInfo.fileOffset, readInfo.readLength,
+                                          DvdReadContract::Describe(failure));
+             } else {
++                TraumaCenterControlTexts::Apply(readInfo.entry->hostPath, readInfo.fileOffset, tempBuf);
+                 CopyToGuestAsDma(bufferPtr, tempBuf.data(), tempBuf.size());
+                 bytesRead = static_cast<int32_t>(tempBuf.size());
+             }
+@@ -1147,6 +1150,7 @@
+         return finish(false);
+     }
+ 
++    TraumaCenterControlTexts::Apply(readInfo.entry->hostPath, readInfo.fileOffset, tempBuf);
+     CopyToGuestAsDma(buffer, tempBuf.data(), tempBuf.size());
+     return finish(true);
+ }
+diff --git a/runtime/src/hle/game_mods/trauma_center_control_texts.h b/runtime/src/hle/game_mods/trauma_center_control_texts.h
+new file mode 100644
+--- /dev/null
++++ b/runtime/src/hle/game_mods/trauma_center_control_texts.h
+@@ -0,0 +1,18 @@
++#pragma once
++
++// Trauma Center: Second Opinion: the tutorial lines that name the Wii Remote's buttons, rewritten for
++// the control mode the player chose (F10, Controller settings, Controls). See
++// trauma_center_control_texts.cpp.
++
++#include <cstdint>
++#include <filesystem>
++#include <vector>
++
++namespace TraumaCenterControlTexts {
++
++// Called with every block a disc read brings in, before it reaches the game: `fileOffset` is where
++// the block starts in its file. Rewrites the lines of the table that fall inside the block, for
++// the Trauma Center disc only; any other file or game is left as read.
++void Apply(const std::filesystem::path& hostPath, uint64_t fileOffset, std::vector<uint8_t>& block);
++
++} // namespace TraumaCenterControlTexts
+diff --git a/runtime/src/hle/game_mods/trauma_center_control_texts.cpp b/runtime/src/hle/game_mods/trauma_center_control_texts.cpp
+new file mode 100644
+--- /dev/null
++++ b/runtime/src/hle/game_mods/trauma_center_control_texts.cpp
+@@ -0,0 +1,121 @@
++// Trauma Center: Second Opinion: the tutorial lines that name the Wii Remote's buttons, rewritten for
++// the control mode the player chose (F10, Controller settings, Controls).
++//
++// A handful of lines in the operation dialogue and on the episode menu tell the player which button
++// to press: "(A and B Buttons)" to grip with the forceps, "(Z Button)" and "(B Button)" for the
++// Healing Touch, and so on. When the game reads those files from the disc, each such line is
++// replaced, in the block just read, by one that names the mouse, the keyboard or the controller.
++//
++// A new line is never longer than the one it replaces; a shorter one is padded with spaces. So every
++// file keeps its size and layout, and nothing else in it moves. The table below gives, for each
++// line, its file, where it starts, its length and a hash of it (made by tools/control_texts.py from
++// the disc): before a line is touched, the disc's own bytes there are checked against that hash, so a
++// different version of the game is simply left alone. The game's own text is not in this file.
++//
++// The files are read when the game starts, so a new control mode shows in the texts after a restart.
++//
++// Los textos de los tutoriales que nombran botones del Wii Remote se cambian, al leerlos del disco,
++// por unos que nombran el mouse, el teclado o el control, según el modo elegido en F10.
++
++#include "hle/game_mods/trauma_center_control_texts.h"
++
++#include "bluetooth/emulated_remote_host.h"
++#include "guest_abi/guest_region.h"
++#include "runtime_log.h"
++
++#include <algorithm>
++#include <array>
++#include <cstring>
++#include <fstream>
++#include <map>
++#include <mutex>
++#include <string>
++
++namespace TraumaCenterControlTexts {
++namespace {
++
++struct Rewrite {
++    const char* file;      // the file's name on the disc
++    uint64_t offset;       // where the line starts in that file
++    uint32_t length;       // the line's length, without its ending zero
++    uint32_t hash;         // FNV-1a of the line as the disc has it
++    // The new line for mouse only, mouse and keyboard, mouse and controller (ControlMode's order);
++    // nullptr keeps the disc's line.
++    std::array<const char*, 3> lines;
++};
++
++constexpr Rewrite kRewrites[] = {
++    {"msg_ope.pak", 45759, 41, 0x97634E2Fu, {"Grip the glass fragments by holding down", "Grip the glass fragments by holding down", nullptr}}, // MSG_OPE101_SELECT_FORCEPS line 0
++    {"msg_ope.pak", 45801, 31, 0x48A3629Eu, {"the left button for a moment.", "Space, or the left button.", nullptr}}, // MSG_OPE101_SELECT_FORCEPS line 1
++    {"msg_ope.pak", 54626, 43, 0x2215F6AFu, {"You can activate the ultrasound with the", "You can activate the ultrasound with", nullptr}}, // MSG_OPE102_SELECT_ULTRASOUND line 0
++    {"msg_ope.pak", 54670, 13, 0x2B3FA558u, {"right button.", "Left Shift.", nullptr}}, // MSG_OPE102_SELECT_ULTRASOUND line 1
++    {"msg_ope.pak", 67151, 34, 0x7B5D3A7Bu, {"click to activate it.", "click to activate it.", nullptr}}, // MSG_OPE105_SELECT_MAGNIFICATION line 1
++    {"msg_ope.pak", 77600, 41, 0x90A8BDA3u, {"and hold the right mouse button down.", "Left Shift and Q at the same time.", "the B Button and LT (L2) together."}}, // MSG_OPE108_STEP_1ST_DEFIBRILLAT line 17
++    {"msg_ope.pak", 86561, 32, 0x8939946Au, {"Let's see... I think I held down", nullptr, nullptr}}, // MSG_OPE203_START_OPE line 4
++    {"msg_ope.pak", 86594, 25, 0x3107DFCFu, {"the right button...", "index finger...(Q key)", "index finger...(LT / L2)"}}, // MSG_OPE203_START_OPE line 5
++    {"msg_ope.pak", 86711, 36, 0x8E6CCDAFu, {"Kept it held down... (right button)", "Tense my other hand... (Left Shift)", nullptr}}, // MSG_OPE203_KEEP_Z line 1
++    {"msg_ope.pak", 86836, 10, 0xC389EC58u, {"(hold it)", "(Q key)", "(LT / L2)"}}, // MSG_OPE203_CAUTION_Z_RELEASE line 1
++    {"msg_ope.pak", 86891, 10, 0xC389EC58u, {"(hold it)", "(Q key)", "(LT / L2)"}}, // MSG_OPE203_CAUTION_Z_RELEASE line 3
++    {"msg_ope.pak", 87134, 10, 0x441CBD00u, {"(hold it)", "(L. Shift)", nullptr}}, // MSG_OPE203_CAUTION_B_RELEASE line 2
++    {"explanation_eng.bm2", 378, 35, 0x4B053E4Fu, {"Middle or side mouse button changes", nullptr, nullptr}}, // LABEL01 line 2
++    {"explanation_eng.bm2", 414, 29, 0x13EEDF86u, {"the difficulty mode.", "mode with the Q or E keys.", "mode with LT or RT (L2/R2)."}}, // LABEL01 line 3
++};
++
++uint32_t Fnv1a(const uint8_t* data, size_t size) {
++    uint32_t value = 0x811C9DC5u;
++    for (size_t i = 0; i < size; ++i) {
++        value = (value ^ data[i]) * 0x01000193u;
++    }
++    return value;
++}
++
++// Whether each line of the table matches the disc, checked once per file from the disc's own bytes.
++bool LineMatchesDisc(const std::filesystem::path& hostPath, const Rewrite& rewrite) {
++    static std::mutex s_mutex;
++    static std::map<const Rewrite*, bool> s_checked;
++    std::lock_guard lock(s_mutex);
++    if (const auto it = s_checked.find(&rewrite); it != s_checked.end()) {
++        return it->second;
++    }
++    std::vector<uint8_t> line(rewrite.length);
++    std::ifstream file(hostPath, std::ios::binary);
++    file.seekg(static_cast<std::streamoff>(rewrite.offset));
++    file.read(reinterpret_cast<char*>(line.data()), static_cast<std::streamsize>(line.size()));
++    const bool matches = file.good() && Fnv1a(line.data(), line.size()) == rewrite.hash;
++    if (!matches) {
++        RT_LOG(RT_TAG_MOD) << "[control texts] " << rewrite.file << " at " << rewrite.offset
++                           << " is not the expected line; it is left as it is" << std::endl;
++    }
++    s_checked.emplace(&rewrite, matches);
++    return matches;
++}
++
++} // namespace
++
++void Apply(const std::filesystem::path& hostPath, uint64_t fileOffset, std::vector<uint8_t>& block) {
++    if (GuestRegion::ForeignGameAddress("RKDEEB", 1u) == 0 || block.empty()) {
++        return;
++    }
++    const std::string name = hostPath.filename().string();
++    const size_t mode = static_cast<size_t>(Bluetooth::CurrentControlMode());
++    const uint64_t blockEnd = fileOffset + block.size();
++    for (const Rewrite& rewrite : kRewrites) {
++        const char* newLine = rewrite.lines[mode];
++        if (newLine == nullptr || name != rewrite.file) {
++            continue;
++        }
++        const uint64_t lineEnd = rewrite.offset + rewrite.length;
++        if (lineEnd <= fileOffset || rewrite.offset >= blockEnd || !LineMatchesDisc(hostPath, rewrite)) {
++            continue;
++        }
++        // The new line, padded with spaces to the old one's length.
++        std::string text(newLine);
++        text.resize(rewrite.length, ' ');
++        // Only the part of the line inside this block.
++        const uint64_t from = std::max(rewrite.offset, fileOffset);
++        const uint64_t to = std::min(lineEnd, blockEnd);
++        std::memcpy(block.data() + (from - fileOffset), text.data() + (from - rewrite.offset), to - from);
++    }
++}
++
++} // namespace TraumaCenterControlTexts
