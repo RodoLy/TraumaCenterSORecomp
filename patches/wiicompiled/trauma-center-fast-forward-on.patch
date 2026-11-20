@@ -1,0 +1,35 @@
+diff --git a/runtime/src/hle/vi.cpp b/runtime/src/hle/vi.cpp
+--- a/runtime/src/hle/vi.cpp
++++ b/runtime/src/hle/vi.cpp
+@@ -262,10 +262,10 @@
+     return probe != nullptr && probe();
+ }
+ // Fast loading is always on (the setting is no longer offered). Holding a key or a controller
+-// button to fast-forward is off unless chosen; the key starts as Tab and both can be changed in
+-// F10 > Controls or in the launcher.
++// button to fast-forward is on unless turned off, so long dialogue can be hurried along; the key
++// starts as Tab and both can be changed in F10 > Controls or in the launcher.
+ std::atomic_bool g_fastLoading{true};
+-std::atomic_bool g_fastForwardKey{RuntimeConfigFile::FastForwardKey(false)};
++std::atomic_bool g_fastForwardKey{RuntimeConfigFile::FastForwardKey(true)};
+ std::atomic_int g_fastForwardScancode{RuntimeConfigFile::FastForwardScancode(SDL_SCANCODE_TAB)};
+ std::atomic_uint32_t g_fastForwardButton{[] {
+     const auto* item = ControllerNames::FindNativeButton(RuntimeConfigFile::FastForwardButton());
+diff --git a/runtime/src/settings_overlay.cpp b/runtime/src/settings_overlay.cpp
+--- a/runtime/src/settings_overlay.cpp
++++ b/runtime/src/settings_overlay.cpp
+@@ -775,10 +775,11 @@
+     }
+ }
+ 
+-// Holding a key or a controller button runs the whole game up to four times faster. Off by default,
+-// like the original game; the key starts as Tab. The launcher's Controls tab writes the same settings.
++// Holding a key or a controller button runs the whole game up to four times faster, which hurries
++// long dialogue along. On by default; the key starts as Tab. The launcher's Controls tab writes the
++// same settings.
+ void DrawFastForwardSettings() {
+-    static bool s_enabled = RuntimeConfigFile::FastForwardKey(false);
++    static bool s_enabled = RuntimeConfigFile::FastForwardKey(true);
+     ImGui::Separator();
+     if (ImGui::Checkbox("Hold to fast-forward", &s_enabled)) {
+         VI_HLE_SetFastForwardKey(s_enabled);
