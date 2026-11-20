@@ -20,10 +20,14 @@ otros que explican el mouse.
 
 El port tendrá dos modos, elegibles en F10 y en `UserData\Config.toml`:
 
-| Modo | Para quién | Controles | Textos |
-|---|---|---|---|
-| **Wii Remote** | Quien juega con un Wii Remote real o con un control | Los del Wii | Los originales |
-| **Stylus** | Quien juega solo con mouse (o pantalla táctil) | Todo con puntero y clic | Cambiados para el mouse |
+| Modo (F10 → Controller settings → Controls, o `[controls] mode` en Config.toml) | Controles |
+|---|---|
+| **Solo mouse** (`mouse`) | Como el stylus de DS: clic en una herramienta para elegirla, clic sostenido para agarrar, clic derecho sostenido para el Healing Touch |
+| **Mouse y teclado** (`mouse_keys`) | El mouse apunta y hace clic; las teclas 1 a 8 eligen herramientas (en el sentido del reloj desde la de arriba), Espacio agarra, Shift izquierdo inicia el Healing Touch |
+| **Mouse y control** (`mouse_controller`) | El mouse apunta y hace clic; el stick del control elige herramientas y sus botones hacen lo demás, como el Nunchuk |
+
+En los tres, lo del mouse funciona siempre; el modo agrega las teclas y decide qué instrucciones
+muestra el juego (cuando estén los textos).
 
 ### Cada acción del Wii y su equivalente en modo stylus
 
@@ -32,7 +36,7 @@ El port tendrá dos modos, elegibles en F10 y en `UserData\Config.toml`:
 | Elegir herramienta | Stick del Nunchuk hacia una de las 8 direcciones | Clic sobre su hexágono del menú (como tocar el ícono en DS) | Hecho |
 | Bisturí, sutura, gel, drenaje, láser, jeringa (aplicar) | Apuntar y apretar o mantener A | Clic o clic sostenido y arrastrar | Hecho (es el A de siempre) |
 | Pinzas (agarrar) | Apretar A y B a la vez, como pellizcando | Mantener el clic: a la décima de segundo se suma B | Hecho, por probar |
-| Healing Touch | Mantener Z y B y dibujar una estrella | Mantener el clic derecho y dibujar la estrella | Por hacer |
+| Healing Touch | Mantener Z y B y dibujar una estrella | Mantener el clic derecho y dibujar la estrella (a los 0.3 s se suma Z) | Hecho, por probar |
 | Desfibrilador | Empujar el Wii Remote y el Nunchuk hacia la pantalla; luego B y Z cuando el medidor llega al nivel | Clic sobre el paciente coloca las paletas (el mod simula el empuje); otro clic descarga (B + Z) | Por hacer |
 | Girar fragmentos de hueso | Girar el Wii Remote en la mano | Rueda del mouse mientras se sostiene el fragmento | Por hacer |
 | Empujar o jalar hacia la pantalla | Acercar o alejar el Wii Remote | Rueda del mouse | Por hacer, falta ver qué operaciones lo piden |
@@ -97,10 +101,14 @@ with ones that explain the mouse.
 
 The port will have two modes, chosen in F10 and in `UserData\Config.toml`:
 
-| Mode | For whom | Controls | Text |
-|---|---|---|---|
-| **Wii Remote** | Players with a real Wii Remote or a controller | The Wii's | The original |
-| **Stylus** | Players with a mouse only (or a touch screen) | Pointer and click | Rewritten for the mouse |
+| Mode (F10 → Controller settings → Controls, or `[controls] mode` in Config.toml) | Controls |
+|---|---|
+| **Mouse only** (`mouse`) | Like the DS stylus: click a tool to pick it, hold the click to grab, hold the right button for the Healing Touch |
+| **Mouse and keyboard** (`mouse_keys`) | The mouse points and clicks; keys 1 to 8 pick tools (clockwise from the top one), Space grabs, Left Shift starts the Healing Touch |
+| **Mouse and controller** (`mouse_controller`) | The mouse points and clicks; the controller's stick picks tools and its buttons do the rest, like the Nunchuk |
+
+In all three, the mouse always works; the mode adds the keys and decides which instructions the game
+shows (once the texts are in).
 
 ### Every Wii action and its stylus-mode equivalent
 
@@ -109,7 +117,7 @@ The port will have two modes, chosen in F10 and in `UserData\Config.toml`:
 | Pick a tool | Nunchuk stick toward one of 8 directions | Click its hexagon in the menu (like tapping the DS icon) | Done |
 | Scalpel, sutures, gel, drain, laser, syringe (apply) | Point and press or hold A | Click, or hold the click and drag | Done (plain A) |
 | Forceps (grab) | Press A and B together, a pinch | Hold the click: after a tenth of a second B joins A | Done, to be tested |
-| Healing Touch | Hold Z and B and draw a star | Hold the right button and draw the star | To do |
+| Healing Touch | Hold Z and B and draw a star | Hold the right button and draw the star (after 0.3 s Z joins B) | Done, to be tested |
 | Defibrillator | Push the Wii Remote and Nunchuk toward the screen, then B and Z when the gauge reaches the mark | A click on the patient places the paddles (the mod fakes the push); another click shocks (B + Z) | To do |
 | Turn bone fragments | Turn the Wii Remote in the hand | Mouse wheel while holding the fragment | To do |
 | Push or pull toward the screen | Move the Wii Remote closer or farther | Mouse wheel | To do, still to see which operations ask for it |

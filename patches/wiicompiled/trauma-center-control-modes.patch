@@ -1,0 +1,297 @@
+diff --git a/runtime/include/runtime_config.h b/runtime/include/runtime_config.h
+--- a/runtime/include/runtime_config.h
++++ b/runtime/include/runtime_config.h
+@@ -52,6 +52,9 @@
+     std::optional<bool> textureDumps;
+     std::optional<bool> showFps;
+     std::optional<std::string> language;
++    // How a game played with the emulated Wii Remote is controlled: "mouse", "mouse_keys" or
++    // "mouse_controller" (see ControlModes below).
++    std::optional<std::string> controlMode;
+     std::optional<bool> fastLoading;
+     std::optional<bool> fastForwardKey;
+     std::optional<int32_t> fastForwardScancode;
+@@ -162,6 +165,18 @@
+     {"english", 1}, {"german", 2}, {"french", 3}, {"spanish", 4}, {"italian", 5},
+ }};
+ 
++// The ways a game played with the emulated Wii Remote can be controlled. The mouse is the pointer in
++// all of them; they differ in what holds the rest of the remote and the Nunchuk, and in which
++// instructions the game shows (see the control texts of a game that has them).
++//   mouse             the mouse alone, like a stylus: clicks pick tools and hold to grab
++//   mouse_keys        the mouse and the keyboard: number keys pick tools, keys for the rest
++//   mouse_controller  the mouse and a controller: its stick picks tools, its buttons the rest
++inline constexpr std::array<const char*, 3> kControlModes = {"mouse", "mouse_keys", "mouse_controller"};
++
++inline bool IsSupportedControlMode(std::string_view mode) {
++    return std::find(kControlModes.begin(), kControlModes.end(), mode) != kControlModes.end();
++}
++
+ inline bool IsSupportedLanguage(std::string_view value) {
+     for (const auto& [name, code] : kConsoleLanguages) {
+         if (name == value) {
+@@ -327,6 +342,11 @@
+               "# The language the console reports to the game: english, spanish, french,\n"
+               "# german or italian. Read once, at startup.\n"
+               "language = \"english\"\n\n"
++              "[controls]\n"
++              "# How a game played with the emulated Wii Remote is controlled: mouse\n"
++              "# (the mouse alone), mouse_keys (mouse and keyboard) or\n"
++              "# mouse_controller (mouse and a controller).\n"
++              "mode = \"mouse\"\n\n"
+               "[audio]\n"
+               "volume = 1.0\n"
+               "music_volume = 1.0\n"
+@@ -501,6 +521,13 @@
+                       << "\", using english" << std::endl;
+         }
+     }
++    if (auto value = FindConfigValue<std::string>(document, "controls", "mode")) {
++        if (IsSupportedControlMode(*value)) {
++            config.controlMode = *value;
++        } else {
++            std::cerr << "[runtime] Unknown controls.mode=\"" << *value << "\", using mouse" << std::endl;
++        }
++    }
+     config.fastLoading = FindConfigValue<bool>(document, "speed", "fast_loading");
+     // "hold_tab_to_fast_forward" is the name older versions wrote, before the key could be changed.
+     config.fastForwardKey = FindConfigValue<bool>(document, "speed", "hold_to_fast_forward");
+@@ -1077,6 +1104,18 @@
+     return Get().disableCopyFilter.value_or(fallback);
+ }
+ 
++inline std::string ControlMode(std::string fallback = "mouse") {
++    return Get().controlMode.value_or(std::move(fallback));
++}
++
++inline bool SetControlMode(std::string value) {
++    if (!IsSupportedControlMode(value)) {
++        return false;
++    }
++    Mutable().controlMode = value;
++    return WriteSetting("controls", "mode", FormatString(value));
++}
++
+ inline std::string Language(std::string fallback = "english") {
+     return Get().language.value_or(std::move(fallback));
+ }
+diff --git a/runtime/include/bluetooth/emulated_remote_host.h b/runtime/include/bluetooth/emulated_remote_host.h
+--- a/runtime/include/bluetooth/emulated_remote_host.h
++++ b/runtime/include/bluetooth/emulated_remote_host.h
+@@ -10,4 +10,12 @@
+ 
+ RemoteHost& RemoteHostForThisGame();
+ 
++// How the emulated remote is played, as Config.toml's [controls] mode keeps it
++// (RuntimeConfigFile::kControlModes, in the same order). The mouse is the pointer in all of them.
++enum class ControlMode { Mouse, MouseKeys, MouseController };
++
++ControlMode CurrentControlMode();
++// Takes effect at once; the caller saves it to Config.toml.
++void SetControlMode(ControlMode mode);
++
+ } // namespace Bluetooth
+diff --git a/runtime/src/hle/bluetooth/emulated_remote_host.cpp b/runtime/src/hle/bluetooth/emulated_remote_host.cpp
+--- a/runtime/src/hle/bluetooth/emulated_remote_host.cpp
++++ b/runtime/src/hle/bluetooth/emulated_remote_host.cpp
+@@ -8,15 +8,18 @@
+ #include "bluetooth/emulated_remote.h"
+ #include "guest_abi/guest_region.h"
+ #include "input_bindings.h"
++#include "runtime_config.h"
+ #include "runtime_log.h"
+ #include "memory.h"
+ #include "wiimote_host.h"
+ 
++#include <SDL3/SDL_keyboard.h>
+ #include <SDL3/SDL_mouse.h>
+ #include <SDL3/SDL_video.h>
+ #include <dolphin/pad.h>
+ 
+ #include <algorithm>
++#include <atomic>
+ #include <chrono>
+ #include <cmath>
+ #include <cstring>
+@@ -27,6 +30,9 @@
+ constexpr size_t kEmulatedSlot = 0;
+ constexpr uint64_t kSampleIntervalUs = 4000;
+ 
++// ControlMode as an int, read on every sample; -1 until Config.toml has been read.
++std::atomic_int g_controlMode{-1};
++
+ uint64_t NowUs() {
+     using namespace std::chrono;
+     return static_cast<uint64_t>(duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count());
+@@ -215,6 +221,52 @@
+     return now - s_heldSinceUs >= kPinchAfterUs;
+ }
+ 
++// True once the right button has been held for kHealingTouchAfterUs without a break. The Healing
++// Touch starts with Z and B held together; B alone is the right click's quick use.
++bool HeldLongEnoughForHealingTouch(bool held) {
++    constexpr uint64_t kHealingTouchAfterUs = 300000;
++    static uint64_t s_heldSinceUs = 0;
++    if (!held) {
++        s_heldSinceUs = 0;
++        return false;
++    }
++    const uint64_t now = NowUs();
++    if (s_heldSinceUs == 0) {
++        s_heldSinceUs = now;
++    }
++    return now - s_heldSinceUs >= kHealingTouchAfterUs;
++}
++
++// With the keyboard, the number keys 1 to 8 pick the tools around the ring, clockwise from the top
++// one: 1 up, 2 up and right, 3 right, 4 down and right, 5 down, 6 down and left, 7 left, 8 up and
++// left. A key pushes the stick toward its tool while held, and at least kMinimumPushUs.
++bool PushToolStickFromKeys(const bool* keys, EmulatedInput& input) {
++    static int s_key = -1;
++    static uint64_t s_startedUs = 0;
++    const uint64_t now = NowUs();
++    int held = -1;
++    for (int i = 0; i < 8; ++i) {
++        if (keys[SDL_SCANCODE_1 + i]) {
++            held = i;
++            break;
++        }
++    }
++    if (held >= 0 && held != s_key) {
++        s_key = held;
++        s_startedUs = now;
++    } else if (held < 0 && s_key >= 0 && now - s_startedUs >= kMinimumPushUs) {
++        s_key = -1;
++    }
++    if (s_key < 0) {
++        return false;
++    }
++    constexpr float kEighth = 3.14159265f / 4.0f;
++    const float angle = 3.14159265f / 2.0f - static_cast<float>(s_key) * kEighth; // from up, clockwise
++    input.stickX = std::cos(angle);
++    input.stickY = std::sin(angle);
++    return true;
++}
++
+ } // namespace TraumaCenterMouse
+ 
+ EmulatedInput ReadControls() {
+@@ -253,7 +305,13 @@
+             // next line of text) is A alone, a held one also pinches.
+             input.buttons |= RemoteButton::kB;
+         }
+-        if ((mouse & SDL_BUTTON_RMASK) != 0) input.buttons |= RemoteButton::kB;
++        const bool right = (mouse & SDL_BUTTON_RMASK) != 0;
++        if (right) input.buttons |= RemoteButton::kB;
++        if (TraumaCenterMouse::IsRunning() && TraumaCenterMouse::HeldLongEnoughForHealingTouch(right)) {
++            // The Healing Touch is Z and B held while drawing a star with the pointer: the right
++            // button held a moment adds Z, and the mouse draws.
++            input.z = true;
++        }
+         if (TraumaCenterMouse::IsRunning()) {
+             // The rest of the Wii Remote and Nunchuk on the mouse, so a mouse alone plays the whole
+             // game: the middle button is Z, the two side buttons are C (forward) and + (back, which
+@@ -263,6 +321,18 @@
+             if ((mouse & SDL_BUTTON_X1MASK) != 0) input.buttons |= RemoteButton::kPlus;
+         }
+     }
++    if (TraumaCenterMouse::IsRunning() && CurrentControlMode() == ControlMode::MouseKeys) {
++        // On top of the keyboard's usual keys (F10, Controller settings: Space A, Left Shift B, Q Z
++        // and so on), the number keys pick tools, Space held also grabs (A and B, a pinch) and Left
++        // Shift held also starts the Healing Touch (B and Z).
++        const bool* keys = SDL_GetKeyboardState(nullptr);
++        TraumaCenterMouse::PushToolStickFromKeys(keys, input);
++        if (keys[SDL_SCANCODE_SPACE]) input.buttons |= RemoteButton::kA | RemoteButton::kB;
++        if (keys[SDL_SCANCODE_LSHIFT]) {
++            input.buttons |= RemoteButton::kB;
++            input.z = true;
++        }
++    }
+     return input;
+ }
+ 
+@@ -375,6 +445,25 @@
+ 
+ } // namespace
+ 
++ControlMode CurrentControlMode() {
++    int mode = g_controlMode.load(std::memory_order_relaxed);
++    if (mode < 0) {
++        const std::string saved = RuntimeConfigFile::ControlMode();
++        mode = 0;
++        for (size_t i = 0; i < RuntimeConfigFile::kControlModes.size(); ++i) {
++            if (saved == RuntimeConfigFile::kControlModes[i]) {
++                mode = static_cast<int>(i);
++            }
++        }
++        g_controlMode.store(mode, std::memory_order_relaxed);
++    }
++    return static_cast<ControlMode>(mode);
++}
++
++void SetControlMode(ControlMode mode) {
++    g_controlMode.store(static_cast<int>(mode), std::memory_order_relaxed);
++}
++
+ RemoteHost& RemoteHostForThisGame() {
+     static Host host(Wiimote::Host());
+     return host;
+diff --git a/runtime/src/settings_overlay.cpp b/runtime/src/settings_overlay.cpp
+--- a/runtime/src/settings_overlay.cpp
++++ b/runtime/src/settings_overlay.cpp
+@@ -1,6 +1,7 @@
+ #include "settings_overlay.h"
+ 
+ #include "hle/gx/gx_frame_trace.h"
++#include "bluetooth/emulated_remote_host.h"
+ #include "guest_abi/guest_region.h"
+ #include "gx_worker.h"
+ #include "audio_backend.h"
+@@ -1096,8 +1097,47 @@
+     ImGui::PopID();
+ }
+ 
++// For a game played with the emulated Wii Remote: how it is played (Config.toml [controls] mode).
++// The mouse is the pointer in all three; the choice says what holds the rest of the controls and
++// which instructions the game shows.
++void DrawControlModeSetting() {
++    struct Choice {
++        const char* label;
++        const char* help;
++    };
++    static constexpr std::array<Choice, 3> kChoices = {{
++        {"Mouse only", "Like the DS stylus: click a tool to pick it, hold the click to grab, hold the "
++                       "right button to start the Healing Touch."},
++        {"Mouse and keyboard", "The mouse points and clicks; keys 1 to 8 pick tools (clockwise from the "
++                               "top), Space grabs, Left Shift starts the Healing Touch."},
++        {"Mouse and controller", "The mouse points and clicks; the controller's stick picks tools and its "
++                                 "buttons do the rest, like the Nunchuk."},
++    }};
++    const int current = static_cast<int>(Bluetooth::CurrentControlMode());
++    if (ImGui::BeginCombo("Controls", kChoices[static_cast<size_t>(current)].label)) {
++        for (size_t i = 0; i < kChoices.size(); ++i) {
++            const bool isSelected = static_cast<int>(i) == current;
++            if (ImGui::Selectable(kChoices[i].label, isSelected) && !isSelected) {
++                Bluetooth::SetControlMode(static_cast<Bluetooth::ControlMode>(i));
++                RuntimeConfigFile::SetControlMode(RuntimeConfigFile::kControlModes[i]);
++            }
++            if (isSelected) {
++                ImGui::SetItemDefaultFocus();
++            }
++        }
++        ImGui::EndCombo();
++    }
++    PushMenuTextWrap();
++    ImGui::TextDisabled("%s", kChoices[static_cast<size_t>(current)].help);
++    ImGui::PopTextWrapPos();
++    ImGui::Separator();
++}
++
+ void DrawControllerSettings() {
+     ImGui::Dummy(ImVec2(kControllerMenuWidth, 0.0f));
++    if (GuestRegion::IsForeignGame()) {
++        DrawControlModeSetting();
++    }
+     for (uint32_t port = 0; port < PAD_MAX_CONTROLLERS; ++port) {
+         DrawPlayerRow(port);
+     }
